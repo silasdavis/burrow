@@ -51,6 +51,7 @@ type Kernel struct {
 	service     rpc.Service
 	listeners   []net.Listener
 	logger      logging_types.InfoTraceLogger
+	shutdownCh  chan struct{}
 }
 
 func NewKernel(privValidator tm_types.PrivValidator, genesisDoc *genesis.GenesisDoc, tmConf *tm_config.Config,
@@ -130,6 +131,10 @@ func (kern *Kernel) Boot() error {
 	return nil
 }
 
+func (kern *Kernel) WaitForShutdown() {
+	<-kern.shutdownCh
+}
+
 func (kern *Kernel) supervise() {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, os.Kill)
@@ -143,4 +148,5 @@ func (kern *Kernel) Shutdown() {
 		listener.Close()
 	}
 	kern.tmNode.Stop()
+	close(kern.shutdownCh)
 }
