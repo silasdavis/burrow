@@ -19,8 +19,9 @@ import (
 	"fmt"
 	"strconv"
 
-	ptypes "github.com/hyperledger/burrow/permission/types"
+	ptypes "github.com/hyperledger/burrow/permission"
 
+	acm "github.com/hyperledger/burrow/account"
 	"github.com/hyperledger/burrow/client"
 	"github.com/hyperledger/burrow/keys"
 	"github.com/hyperledger/burrow/txs"
@@ -40,14 +41,14 @@ func Send(nodeClient client.NodeClient, keyClient keys.KeyClient, pubkey, addr, 
 		return nil, fmt.Errorf("destination address must be given with --to flag")
 	}
 
-	toAddrBytes, err := hex.DecodeString(toAddr)
+	toAddress, err := addressFromHexString(toAddr)
 	if err != nil {
-		return nil, fmt.Errorf("toAddr is bad hex: %v", err)
+		return nil, err
 	}
 
 	tx := txs.NewSendTx()
-	tx.AddInputWithNonce(pub, amt, int(nonce))
-	tx.AddOutput(toAddrBytes, amt)
+	tx.AddInputWithNonce(pub, amt, nonce)
+	tx.AddOutput(toAddress, amt)
 
 	return tx, nil
 }
@@ -58,17 +59,17 @@ func Call(nodeClient client.NodeClient, keyClient keys.KeyClient, pubkey, addr, 
 		return nil, err
 	}
 
-	toAddrBytes, err := hex.DecodeString(toAddr)
+	toAddress, err := addressFromHexString(toAddr)
 	if err != nil {
 		return nil, fmt.Errorf("toAddr is bad hex: %v", err)
 	}
 
-	fee, err := strconv.ParseInt(feeS, 10, 64)
+	fee, err := strconv.ParseUint(feeS, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("fee is misformatted: %v", err)
 	}
 
-	gas, err := strconv.ParseInt(gasS, 10, 64)
+	gas, err := strconv.ParseUint(gasS, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("gas is misformatted: %v", err)
 	}
@@ -78,7 +79,7 @@ func Call(nodeClient client.NodeClient, keyClient keys.KeyClient, pubkey, addr, 
 		return nil, fmt.Errorf("data is bad hex: %v", err)
 	}
 
-	tx := txs.NewCallTxWithNonce(pub, toAddrBytes, dataBytes, amt, gas, fee, int(nonce))
+	tx := txs.NewCallTxWithNonce(pub, &toAddress, dataBytes, amt, gas, fee, nonce)
 	return tx, nil
 }
 
@@ -88,12 +89,12 @@ func Name(nodeClient client.NodeClient, keyClient keys.KeyClient, pubkey, addr, 
 		return nil, err
 	}
 
-	fee, err := strconv.ParseInt(feeS, 10, 64)
+	fee, err := strconv.ParseUint(feeS, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("fee is misformatted: %v", err)
 	}
 
-	tx := txs.NewNameTxWithNonce(pub, name, data, amt, fee, int(nonce))
+	tx := txs.NewNameTxWithNonce(pub, name, data, amt, fee, nonce)
 	return tx, nil
 }
 
@@ -142,22 +143,22 @@ func Permissions(nodeClient client.NodeClient, keyClient keys.KeyClient, pubkey,
 		}
 		args = &ptypes.SetGlobalArgs{pF, value}
 	case "addRole":
-		addr, err := hex.DecodeString(argsS[0])
+		address, err := addressFromHexString(argsS[0])
 		if err != nil {
 			return nil, err
 		}
-		args = &ptypes.AddRoleArgs{addr, argsS[1]}
+		args = &ptypes.AddRoleArgs{address, argsS[1]}
 	case "removeRole":
-		addr, err := hex.DecodeString(argsS[0])
+		address, err := addressFromHexString(argsS[0])
 		if err != nil {
 			return nil, err
 		}
-		args = &ptypes.RmRoleArgs{addr, argsS[1]}
+		args = &ptypes.RmRoleArgs{address, argsS[1]}
 	default:
 		return nil, fmt.Errorf("Invalid permission function for use in PermissionsTx: %s", permFunc)
 	}
 	// args := snativeArgs(
-	tx := txs.NewPermissionsTxWithNonce(pub, args, int(nonce))
+	tx := txs.NewPermissionsTxWithNonce(pub, args, nonce)
 	return tx, nil
 }
 
@@ -167,7 +168,7 @@ func Bond(nodeClient client.NodeClient, keyClient keys.KeyClient, pubkey, unbond
 	// if err != nil {
 	// 	return nil, err
 	// }
-	// var pubKey crypto.PubKeyEd25519
+	// var pubKey acm.PublicKeyEd25519
 	// var unbondAddrBytes []byte
 
 	// if unbondAddr == "" {
@@ -241,7 +242,7 @@ type TxResult struct {
 	Hash      []byte // all txs get a hash
 
 	// only CallTx
-	Address   []byte // only for new contracts
+	Address   acm.Address // only for new contracts
 	Return    []byte
 	Exception string
 
@@ -252,7 +253,7 @@ type TxResult struct {
 // Preserve
 func SignAndBroadcast(chainID string, nodeClient client.NodeClient, keyClient keys.KeyClient, tx txs.Tx, sign,
 	broadcast, wait bool) (txResult *TxResult, err error) {
-	var inputAddr []byte
+	var inputAddr acm.Address
 	if sign {
 		inputAddr, tx, err = signTx(keyClient, chainID, tx)
 		if err != nil {
@@ -287,9 +288,9 @@ func SignAndBroadcast(chainID string, nodeClient client.NodeClient, keyClient ke
 					}
 					txResult.BlockHash = confirmation.BlockHash
 					txResult.Exception = ""
-					eventDataTx, ok := confirmation.Event.(*txs.EventDataTx)
-					if !ok {
-						err = fmt.Errorf("Received wrong event type.")
+					eventDataTx := confirmation.EventDataTx
+					if eventDataTx == nil {
+						err = fmt.Errorf("EventDataTx was nil")
 						return
 					}
 					txResult.Return = eventDataTx.Return
@@ -309,10 +310,18 @@ func SignAndBroadcast(chainID string, nodeClient client.NodeClient, keyClient ke
 		// reasonable to get this returned from the chain directly.  Alternatively,
 		// the benefit is that the we don't need to trust the chain node
 		if tx_, ok := tx.(*txs.CallTx); ok {
-			if len(tx_.Address) == 0 {
-				txResult.Address = txs.NewContractAddress(tx_.Input.Address, tx_.Input.Sequence)
+			if tx_.Address == nil {
+				txResult.Address = acm.NewContractAddress(tx_.Input.Address, tx_.Input.Sequence)
 			}
 		}
 	}
 	return
+}
+
+func addressFromHexString(addrString string) (acm.Address, error) {
+	addrBytes, err := hex.DecodeString(addrString)
+	if err != nil {
+		return acm.Address{}, err
+	}
+	return acm.AddressFromBytes(addrBytes)
 }

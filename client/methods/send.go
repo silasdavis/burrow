@@ -19,11 +19,10 @@ import (
 
 	"github.com/hyperledger/burrow/client"
 	"github.com/hyperledger/burrow/client/rpc"
-	"github.com/hyperledger/burrow/definitions"
 	"github.com/hyperledger/burrow/keys"
 )
 
-func Send(do *definitions.ClientDo) error {
+func Send(do *client.Do) error {
 	// construct two clients to call out to keys server and
 	// blockchain node.
 	logger, err := loggerFromClientDo(do, "Send")

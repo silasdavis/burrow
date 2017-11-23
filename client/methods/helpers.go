@@ -15,9 +15,10 @@
 package methods
 
 import (
+	"github.com/hyperledger/burrow/account"
+	"github.com/hyperledger/burrow/client"
 	"github.com/hyperledger/burrow/client/rpc"
 	"github.com/hyperledger/burrow/core"
-	"github.com/hyperledger/burrow/definitions"
 	"github.com/hyperledger/burrow/logging"
 	"github.com/hyperledger/burrow/logging/lifecycle"
 	logging_types "github.com/hyperledger/burrow/logging/types"
@@ -31,7 +32,7 @@ func unpackSignAndBroadcast(result *rpc.TxResult, logger logging_types.InfoTrace
 
 	logger = logger.With("transaction hash", result.Hash)
 
-	if result.Address != nil {
+	if result.Address != account.ZeroAddress {
 		logger = logger.With("Contract Address", result.Address)
 	}
 
@@ -45,7 +46,7 @@ func unpackSignAndBroadcast(result *rpc.TxResult, logger logging_types.InfoTrace
 	logging.InfoMsg(logger, "SignAndBroadcast result")
 }
 
-func loggerFromClientDo(do *definitions.ClientDo, scope string) (logging_types.InfoTraceLogger, error) {
+func loggerFromClientDo(do *client.Do, scope string) (logging_types.InfoTraceLogger, error) {
 	lc, err := core.LoadLoggingConfigFromClientDo(do)
 	if err != nil {
 		return nil, err
