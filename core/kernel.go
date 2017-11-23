@@ -97,6 +97,7 @@ func NewKernel(privValidator tm_types.PrivValidator, genesisDoc *genesis.Genesis
 		tmNode:      tmNode,
 		service:     service,
 		logger:      logger,
+		shutdownCh:  make(chan struct{}),
 	}, nil
 }
 
@@ -144,9 +145,14 @@ func (kern *Kernel) supervise() {
 
 // Stop the core allowing for a graceful shutdown of component in order.
 func (kern *Kernel) Shutdown() {
+	logger := logging.WithScope(kern.logger, "Shutdown")
+	logging.InfoMsg(logger, "Attempting graceful shutdown...")
+	logging.InfoMsg(logger, "Shutting down listeners")
 	for _, listener := range kern.listeners {
 		listener.Close()
 	}
+	logging.InfoMsg(logger, "Shutting down Tendermint node")
 	kern.tmNode.Stop()
+	logging.InfoMsg(logger, "Shutdown complete")
 	close(kern.shutdownCh)
 }
