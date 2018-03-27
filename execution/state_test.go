@@ -20,13 +20,17 @@ import (
 	acm "github.com/hyperledger/burrow/account"
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tmlibs/db"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestState_UpdateAccount(t *testing.T) {
 	state := NewState(db.NewMemDB())
 	account := acm.NewConcreteAccountFromSecret("Foo").MutableAccount()
 	account.SetStorageRoot([]byte{2, 3, 4})
-	state.UpdateAccount(account)
-	err := state.Save()
+	err := state.UpdateAccount(account)
+	err = state.Save()
 	require.NoError(t, err)
+	accountOut, err := state.GetAccount(account.Address())
+	require.NoError(t, err)
+	assert.Equal(t, account, accountOut)
 }
