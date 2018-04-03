@@ -33,7 +33,7 @@ import (
 	evm_events "github.com/hyperledger/burrow/execution/evm/events"
 	"github.com/hyperledger/burrow/execution/evm/sha3"
 	"github.com/hyperledger/burrow/genesis"
-	"github.com/hyperledger/burrow/logging/loggers"
+	"github.com/hyperledger/burrow/logging"
 	"github.com/hyperledger/burrow/permission"
 	ptypes "github.com/hyperledger/burrow/permission/types"
 	"github.com/hyperledger/burrow/txs"
@@ -111,7 +111,7 @@ x 		- roles: has, add, rm
 
 // keys
 var users = makeUsers(10)
-var logger = loggers.NewNoopInfoTraceLogger()
+var logger = logging.NewNoopLogger()
 var deterministicGenesis = genesis.NewDeterministicGenesis(34059836243380576)
 var testGenesisDoc, testPrivAccounts, _ = deterministicGenesis.
 	GenesisDoc(3, true, 1000, 1, true, 1000)
@@ -165,8 +165,8 @@ func newBaseGenDoc(globalPerm, accountPerm ptypes.AccountPermissions) genesis.Ge
 	}
 }
 
-//func getAccount(state acm.Getter, address acm.Address) acm.MutableAccount {
-//	acc, _ := acm.GetMutableAccount(state, address)
+//func getAccount(state state.AccountGetter, address acm.Address) acm.MutableAccount {
+//	acc, _ := state.GetMutableAccount(state, address)
 //	return acc
 //}
 
@@ -961,7 +961,7 @@ func TestSNativeTx(t *testing.T) {
 	snativeArgs = snativePermTestInputTx("setGlobal", users[3], permission.CreateContract, true)
 	testSNativeTxExpectFail(t, batchCommitter, snativeArgs)
 	testSNativeTxExpectPass(t, batchCommitter, permission.SetGlobal, snativeArgs)
-	acc = getAccount(batchCommitter.stateCache, permission.GlobalPermissionsAddress)
+	acc = getAccount(batchCommitter.stateCache, acm.GlobalPermissionsAddress)
 	if v, _ := acc.MutablePermissions().Base.Get(permission.CreateContract); !v {
 		t.Fatal("expected permission to be set true")
 	}
@@ -1717,8 +1717,8 @@ func makeGenesisState(numAccounts int, randBalance bool, minBalance uint64, numV
 	return s0, privAccounts
 }
 
-func getAccount(state acm.Getter, address acm.Address) acm.MutableAccount {
-	acc, _ := acm.GetMutableAccount(state, address)
+func getAccount(state state.AccountGetter, address acm.Address) acm.MutableAccount {
+	acc, _ := state.GetMutableAccount(state, address)
 	return acc
 }
 

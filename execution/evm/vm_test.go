@@ -29,7 +29,7 @@ import (
 	. "github.com/hyperledger/burrow/execution/evm/asm"
 	. "github.com/hyperledger/burrow/execution/evm/asm/bc"
 	evm_events "github.com/hyperledger/burrow/execution/evm/events"
-	"github.com/hyperledger/burrow/logging/loggers"
+	"github.com/hyperledger/burrow/logging"
 	"github.com/hyperledger/burrow/permission"
 	ptypes "github.com/hyperledger/burrow/permission/types"
 	"github.com/stretchr/testify/assert"
@@ -39,7 +39,7 @@ import (
 
 // Test output is a bit clearer if we /dev/null the logging, but can be re-enabled by uncommenting the below
 //var logger, _ = lifecycle.NewStdErrLogger()
-var logger = loggers.NewNoopInfoTraceLogger()
+var logger = logging.NewNoopLogger()
 
 func newAppState() *FakeAppState {
 	fas := &FakeAppState{
@@ -47,7 +47,7 @@ func newAppState() *FakeAppState {
 		storage:  make(map[string]Word256),
 	}
 	// For default permissions
-	fas.accounts[permission.GlobalPermissionsAddress] = acm.ConcreteAccount{
+	fas.accounts[acm.GlobalPermissionsAddress] = acm.ConcreteAccount{
 		Permissions: permission.DefaultAccountPermissions,
 	}.Account()
 	return fas
@@ -156,6 +156,28 @@ func TestSubcurrency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+//This test case is taken from EIP-140 (https://github.com/ethereum/EIPs/blob/master/EIPS/eip-140.md);
+//it is meant to test the implementation of the REVERT opcode
+func TestRevert(t *testing.T) {
+	ourVm := NewVM(newAppState(), DefaultDynamicMemoryProvider, newParams(), acm.ZeroAddress, nil, logger)
+
+	// Create accounts
+	account1 := newAccount(1)
+	account2 := newAccount(1, 0, 1)
+
+	var gas uint64 = 100000
+
+	bytecode := MustSplice(PUSH32, 0x72, 0x65, 0x76, 0x65, 0x72, 0x74, 0x20, 0x6D, 0x65, 0x73, 0x73, 0x61,
+		0x67, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, PUSH1, 0x00, MSTORE, PUSH1, 0x0E, PUSH1, 0x00, REVERT)
+
+	start := time.Now()
+	output, err := ourVm.Call(account1, account2, bytecode, []byte{}, 0, &gas)
+	assert.Error(t, err, "Expected execution reverted error")
+	fmt.Printf("Output: %v Error: %v\n", output, err)
+	fmt.Println("Call took:", time.Since(start))
 }
 
 // Test sending tokens from a contract to another account
@@ -412,7 +434,7 @@ func runVM(eventCh chan<- *evm_events.EventDataCall, ourVm *VM, caller, callee a
 	subscribeAddr acm.Address, contractCode []byte, gas uint64) ([]byte, error) {
 
 	// we need to catch the event from the CALL to check for exceptions
-	emitter := event.NewEmitter(loggers.NewNoopInfoTraceLogger())
+	emitter := event.NewEmitter(logging.NewNoopLogger())
 	fmt.Printf("subscribe to %s\n", subscribeAddr)
 
 	err := evm_events.SubscribeAccountCall(context.Background(), emitter, "test", subscribeAddr, nil, eventCh)
