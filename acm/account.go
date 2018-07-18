@@ -138,6 +138,8 @@ func AsMutableAccount(account Account) *MutableAccount {
 	return AsConcreteAccount(account).MutableAccount()
 }
 
+var _ Account = &MutableAccount{}
+
 func (acc ConcreteAccount) String() string {
 	return fmt.Sprintf("ConcreteAccount{Address: %s; Sequence: %v; PublicKey: %v Balance: %v; CodeLength: %v; Permissions: %s}",
 		acc.Address, acc.Sequence, acc.PublicKey, acc.Balance, len(acc.Code), acc.Permissions)
@@ -177,6 +179,11 @@ func (acc *MutableAccount) AddToBalance(amount uint64) error {
 	return nil
 }
 
+func (acc *MutableAccount) SetBalance(amount uint64) error {
+	acc.concreteAccount.Balance = amount
+	return nil
+}
+
 func (acc *MutableAccount) SetCode(code []byte) error {
 	acc.concreteAccount.Code = code
 	return nil
@@ -186,8 +193,11 @@ func (acc *MutableAccount) IncSequence() {
 	acc.concreteAccount.Sequence++
 }
 
-func (acc *MutableAccount) SetPermissions(permissions permission.AccountPermissions) error {
-	acc.concreteAccount.Permissions = permissions
+func (acc *MutableAccount) SetPermissions(accPerms permission.AccountPermissions) error {
+	if !accPerms.Base.Perms.IsValid() {
+		return fmt.Errorf("attempt to set invalid perm 0%b on account %v", accPerms.Base.Perms, acc)
+	}
+	acc.concreteAccount.Permissions = accPerms
 	return nil
 }
 
