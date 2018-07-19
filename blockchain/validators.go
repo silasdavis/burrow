@@ -17,75 +17,61 @@ const maxAminoReadSizeBytes int64 = 1 << 8
 
 // A Validator multiset - can be used to capture the global state of validators or as an accumulator each block
 type Validators struct {
-	trim       bool
 	powers     map[crypto.Address]*big.Int
-	publicKeys map[crypto.Address]crypto.PublicKey
+	publicKeys map[crypto.Address]crypto.Addressable
 	totalPower *big.Int
 }
 
 type ValidatorSet interface {
-	AlterPower(publicKey crypto.PublicKey, power *big.Int) (flow *big.Int, err error)
-}
-
-func NewValidators() *Validators {
-	return newValidators(true)
-}
-
-// Returns validators that continue to store zeroed (removed) validators so total flow can be calculated
-func NewValidatorsNoTrim() *Validators {
-	return newValidators(false)
+	AlterPower(id crypto.Addressable, power *big.Int) (flow *big.Int, err error)
 }
 
 // Create a new Validators which can act as an accumulator for validator power changes
-func newValidators(trim bool) *Validators {
+func NewValidators() *Validators {
 	return &Validators{
-		trim:       trim,
+
 		totalPower: new(big.Int),
 		powers:     make(map[crypto.Address]*big.Int),
-		publicKeys: make(map[crypto.Address]crypto.PublicKey),
+		publicKeys: make(map[crypto.Address]crypto.Addressable),
 	}
 }
 
 // Add the power of a validator and returns the flow into that validator
-func (vs *Validators) AlterPower(publicKey crypto.PublicKey, power *big.Int) (*big.Int, error) {
-	address := publicKey.Address()
+func (vs *Validators) AlterPower(id crypto.Addressable, power *big.Int) *big.Int {
+	address := id.Address()
 	// Calculcate flow into this validator (postive means in, negative means out)
 	flow := new(big.Int).Sub(power, vs.Power(address))
-	if vs.trim && power.Cmp(big0) == 0 {
+	if power.Cmp(big0) == 0 {
 		// Remove from set so that we return an accurate length
 		delete(vs.publicKeys, address)
 		delete(vs.powers, address)
-		return flow, nil
+		return flow
 	}
 	vs.totalPower.Add(vs.totalPower, flow)
-	vs.publicKeys[address] = publicKey
+	vs.publicKeys[address] = crypto.MemoizeAddressable(id)
 	vs.powers[address] = power
-	return flow, nil
+	return flow
 }
 
-func (vs *Validators) AddPower(publicKey crypto.PublicKey, power *big.Int) error {
+func (vs *Validators) AddPower(id crypto.Addressable, power *big.Int) {
 	// Current power + power
-	_, err := vs.AlterPower(publicKey, new(big.Int).Add(vs.Power(publicKey.Address()), power))
-	return err
+	vs.AlterPower(id, new(big.Int).Add(vs.Power(id.Address()), power))
 }
 
-func (vs *Validators) SubtractPower(publicKey crypto.PublicKey, power *big.Int) error {
+func (vs *Validators) SubtractPower(id crypto.Addressable, power *big.Int) {
 	// Current power - power
-	_, err := vs.AlterPower(publicKey, new(big.Int).Sub(vs.Power(publicKey.Address()), power))
-	return err
+	vs.AlterPower(id, new(big.Int).Sub(vs.Power(id.Address()), power))
 }
 
 func (vs *Validators) Power(address crypto.Address) *big.Int {
 	if vs.powers[address] == nil {
-		zero := new(big.Int)
-		vs.powers[address] = zero
-		return zero
+		return new(big.Int)
 	}
 	return vs.powers[address]
 }
 
 // Iterates over validators sorted by address
-func (vs *Validators) Iterate(iter func(publicKey crypto.PublicKey, power *big.Int) (stop bool)) (stopped bool) {
+func (vs *Validators) Iterate(iter func(id crypto.Addressable, power *big.Int) (stop bool)) (stopped bool) {
 	if vs == nil {
 		return
 	}
@@ -102,12 +88,21 @@ func (vs *Validators) Iterate(iter func(publicKey crypto.PublicKey, power *big.I
 	return
 }
 
-func (vs *Validators) Size() int {
+func (vs *Validators) Count() int {
 	return len(vs.publicKeys)
 }
 
 func (vs *Validators) TotalPower() *big.Int {
-	return vs.totalPower
+	return new(big.Int).Set(vs.totalPower)
+}
+
+func (vs *Validators) Copy() *Validators {
+	vsCopy := NewValidators()
+	vs.Iterate(func(id crypto.Addressable, power *big.Int) (stop bool) {
+		vsCopy.AlterPower(id, power)
+		return
+	})
+	return vsCopy
 }
 
 type PersistedValidator struct {
@@ -122,9 +117,9 @@ func (vs *Validators) Encode() ([]byte, error) {
 	buffer := new(bytes.Buffer)
 	// varint buffer
 	var err error
-	vs.Iterate(func(publicKey crypto.PublicKey, power *big.Int) (stop bool) {
+	vs.Iterate(func(id crypto.Addressable, power *big.Int) (stop bool) {
 		_, err = cdc.MarshalBinaryWriter(buffer, PersistedValidator{
-			PublicKey:  publicKey,
+			PublicKey:  id.PublicKey(),
 			PowerBytes: power.Bytes(),
 		})
 		if err != nil {
@@ -136,7 +131,7 @@ func (vs *Validators) Encode() ([]byte, error) {
 }
 
 func (vs *Validators) String() string {
-	return fmt.Sprintf("Validators{TotalPower: %v; Size: %v}", vs.TotalPower(), vs.Size())
+	return fmt.Sprintf("Validators{TotalPower: %v; Count: %v}", vs.TotalPower(), vs.Count())
 }
 
 // Decodes validators encoded with Encode - expects the exact encoded size with no trailing bytes
@@ -148,10 +143,7 @@ func DecodeValidators(encoded []byte, validators *Validators) error {
 		_, err = cdc.UnmarshalBinaryReader(buffer, pv, maxAminoReadSizeBytes)
 		if err == nil {
 			power := new(big.Int).SetBytes(pv.PowerBytes)
-			_, err = validators.AlterPower(pv.PublicKey, power)
-			if err != nil {
-				return err
-			}
+			validators.AlterPower(pv.PublicKey, power)
 		}
 	}
 	if err != io.EOF {

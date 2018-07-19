@@ -40,7 +40,7 @@ type TipInfo interface {
 	LastBlockTime() time.Time
 	LastBlockHash() []byte
 	AppHashAfterLastBlock() []byte
-	IterateValidators(iter func(publicKey crypto.PublicKey, power *big.Int) (stop bool)) (stopped bool)
+	IterateValidators(iter func(id crypto.Addressable, power *big.Int) (stop bool)) (stopped bool)
 	NumValidators() int
 }
 
@@ -62,7 +62,7 @@ type Tip struct {
 	lastBlockHash         []byte
 	appHashAfterLastBlock []byte
 	validators            *Validators
-	validatorsWindow      *ValidatorsWindow
+	validatorsRing        *ValidatorsRing
 }
 
 type Blockchain struct {
@@ -107,13 +107,15 @@ func LoadOrNewBlockchain(db dbm.DB, genesisDoc *genesis.GenesisDoc,
 
 // Pointer to blockchain state initialised from genesis
 func newBlockchain(db dbm.DB, genesisDoc *genesis.GenesisDoc) *Blockchain {
+	vs := NewValidators()
+	for _, gv := range genesisDoc.Validators {
+		vs.AlterPower(gv.PublicKey, new(big.Int).SetUint64(gv.Amount))
+	}
+	root := NewRoot(genesisDoc)
 	bc := &Blockchain{
 		db:   db,
-		Root: NewRoot(genesisDoc),
-		Tip:  NewTip(genesisDoc.ChainID(), NewRoot(genesisDoc).genesisDoc.GenesisTime, NewRoot(genesisDoc).genesisHash),
-	}
-	for _, gv := range genesisDoc.Validators {
-		bc.validators.AlterPower(gv.PublicKey, new(big.Int).SetUint64(gv.Amount))
+		Root: root,
+		Tip:  NewTip(genesisDoc.ChainID(), root.genesisDoc.GenesisTime, root.genesisHash, vs),
 	}
 	return bc
 }
@@ -141,22 +143,22 @@ func NewRoot(genesisDoc *genesis.GenesisDoc) *Root {
 }
 
 // Create genesis Tip
-func NewTip(chainID string, genesisTime time.Time, genesisHash []byte) *Tip {
+func NewTip(chainID string, genesisTime time.Time, genesisHash []byte, initialValidators *Validators) *Tip {
 	return &Tip{
 		chainID:               chainID,
 		lastBlockTime:         genesisTime,
 		appHashAfterLastBlock: genesisHash,
-		validators:            NewValidators(),
-		validatorsWindow:      NewValidatorsWindow(DefaultValidatorsWindowSize),
+		validators:            initialValidators,
+		validatorsRing:        NewValidatorsRing(initialValidators, DefaultValidatorsWindowSize),
 	}
 }
 
-func (bc *Blockchain) FlushValidators() (powerChange *big.Int, totalFlow *big.Int, err error) {
-	return bc.validatorsWindow.FlushInto(bc.validators)
-}
+//func (bc *Blockchain) FlushValidators() (powerChange *big.Int, totalFlow *big.Int, err error) {
+//	return bc.validatorsWindow.FlushInto(bc.validators)
+//}
 
-func (bc *Blockchain) AlterPower(publicKey crypto.PublicKey, power *big.Int) (*big.Int, error) {
-	return bc.validatorsWindow.AlterPower(publicKey, power)
+func (bc *Blockchain) AlterPower(id crypto.Addressable, power *big.Int) (*big.Int, error) {
+	return bc.validatorsRing.AlterPower(id, power)
 }
 
 func (bc *Blockchain) CommitBlock(blockTime time.Time, blockHash, appHash []byte) error {
@@ -238,10 +240,10 @@ func (t *Tip) AppHashAfterLastBlock() []byte {
 	return t.appHashAfterLastBlock
 }
 
-func (t *Tip) IterateValidators(iter func(publicKey crypto.PublicKey, power *big.Int) (stop bool)) (stopped bool) {
+func (t *Tip) IterateValidators(iter func(id crypto.Addressable, power *big.Int) (stop bool)) (stopped bool) {
 	return t.validators.Iterate(iter)
 }
 
 func (t *Tip) NumValidators() int {
-	return t.validators.Size()
+	return t.validators.Count()
 }

@@ -143,7 +143,7 @@ func (te *testExecutor) signExecuteCommit(tx payload.Payload, signer acm.Address
 	if err != nil {
 		return err
 	}
-	appHash, err := te.Commit(nil)
+	appHash, err := te.Commit(nil, []byte("Blocky McHash"))
 	if err != nil {
 		return err
 	}
@@ -1553,7 +1553,7 @@ func TestSelfDestruct(t *testing.T) {
 	signAndExecute(t, false, exe, testChainID, tx, privAccounts[0])
 
 	// commit the block
-	exe.Commit(nil)
+	exe.Commit(nil, []byte("Blocky McHash"))
 
 	// acc2 should receive the sent funds and the contracts balance
 	newAcc2 := getAccount(st, acc2.Address())
@@ -1588,7 +1588,7 @@ func execTxWithStateAndBlockchain(state *State, blockchain *bcm.Blockchain, txEn
 	if _, err := exe.Execute(txEnv); err != nil {
 		return err
 	} else {
-		_, err := exe.Commit(nil)
+		_, err := exe.Commit(nil, []byte("Blocky McHash"))
 		if err != nil {
 			return err
 		}
@@ -1658,7 +1658,7 @@ func execTxWaitAccountCall(t *testing.T, exe *testExecutor, txEnv *txs.Envelope,
 	if err != nil {
 		return nil, err
 	}
-	_, err = exe.Commit(nil)
+	_, err = exe.Commit(nil, []byte("Blocky McHash"))
 	require.NoError(t, err)
 	err = exe.blockchain.CommitBlock(time.Time{}, nil, nil)
 	require.NoError(t, err)

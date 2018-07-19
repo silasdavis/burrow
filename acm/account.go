@@ -27,16 +27,9 @@ import (
 
 var GlobalPermissionsAddress = crypto.Address(binary.Zero160)
 
-type Addressable interface {
-	// Get the 20 byte EVM address of this account
-	Address() crypto.Address
-	// Public key from which the Address is derived
-	PublicKey() crypto.PublicKey
-}
-
 // The default immutable interface to an account
 type Account interface {
-	Addressable
+	crypto.Addressable
 	// The value held by this account in terms of the chain-native token
 	Balance() uint64
 	// The EVM byte code held by this account (or equivalently, this contract)
@@ -117,7 +110,7 @@ func AsConcreteAccount(account Account) *ConcreteAccount {
 }
 
 // Creates an otherwise zeroed Account from an Addressable and returns it as MutableAccount
-func FromAddressable(addressable Addressable) *MutableAccount {
+func FromAddressable(addressable crypto.Addressable) *MutableAccount {
 	ca := &ConcreteAccount{
 		Address:   addressable.Address(),
 		PublicKey: addressable.PublicKey(),

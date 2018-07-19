@@ -69,7 +69,7 @@ type BatchCommitter interface {
 	BatchExecutor
 	// Commit execution results to underlying State and provide opportunity
 	// to mutate state before it is saved
-	Commit(block *abciTypes.RequestBeginBlock) (stateHash []byte, err error)
+	Commit(block *abciTypes.Header, blockHash []byte) (stateHash []byte, err error)
 }
 
 type executor struct {
@@ -205,7 +205,7 @@ func (exe *executor) finaliseBlockExecution(header *abciTypes.Header) (*exec.Blo
 	return be, nil
 }
 
-func (exe *executor) Commit(block *abciTypes.RequestBeginBlock) (_ []byte, err error) {
+func (exe *executor) Commit(header *abciTypes.Header, blockHash []byte) (_ []byte, err error) {
 	// The write lock to the executor is controlled by the caller (e.g. abci.App) so we do not acquire it here to avoid
 	// deadlock
 	defer func() {
@@ -214,20 +214,8 @@ func (exe *executor) Commit(block *abciTypes.RequestBeginBlock) (_ []byte, err e
 		}
 	}()
 	exe.logger.InfoMsg("Executor committing", "height", exe.blockExecution.Height)
-	// Perform a sanity check our block height
-	if exe.blockchain.LastBlockHeight() != uint64(block.Header.Height) {
-		exe.logger.InfoMsg("Burrow block height disagrees with Tendermint block height",
-			structure.ScopeKey, "Commit()",
-			"burrow_height", exe.blockchain.LastBlockHeight(),
-			"tendermint_height", block.Header.Height)
-
-		panic(fmt.Errorf("burrow has recorded a block height of %v, "+
-			"but Tendermint reports a block height of %v, and the two should agree",
-			exe.blockchain.LastBlockHeight(), block.Header.Height))
-	}
 	// Form BlockExecution for this block from TxExecutions and Tendermint block header
-	header := block.Header
-	blockExecution, err := exe.finaliseBlockExecution(&header)
+	blockExecution, err := exe.finaliseBlockExecution(header)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +255,7 @@ func (exe *executor) Commit(block *abciTypes.RequestBeginBlock) (_ []byte, err e
 
 	// Commit to our blockchain state which will checkpoint the previous app hash by saving it to the database
 	// (we know the previous app hash is safely committed because we are about to commit the next)
-	err = exe.blockchain.CommitBlock(time.Unix(block.Header.Time, 0), block.Hash, hash)
+	err = exe.blockchain.CommitBlock(time.Unix(header.Time, 0), blockHash, hash)
 	if err != nil {
 		panic(errors.Wrap(err, "could not commit block to blockchain state"))
 	}

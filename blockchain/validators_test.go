@@ -17,8 +17,7 @@ import (
 func TestValidators_AlterPower(t *testing.T) {
 	vs := NewValidators()
 	pow1 := big.NewInt(2312312321)
-	_, err := vs.AlterPower(pubKey(1), pow1)
-	require.NoError(t, err)
+	vs.AlterPower(pubKey(1), pow1)
 	assert.Equal(t, pow1, vs.TotalPower())
 }
 
@@ -27,8 +26,7 @@ func TestValidators_Encode(t *testing.T) {
 	rnd := rand.New(rand.NewSource(43534543))
 	for i := 0; i < 100; i++ {
 		power := big.NewInt(rnd.Int63n(10))
-		_, err := vs.AlterPower(pubKey(rnd.Int63()), power)
-		require.NoError(t, err)
+		vs.AlterPower(pubKey(rnd.Int63()), power)
 	}
 	encoded, err := vs.Encode()
 	require.NoError(t, err)
@@ -36,12 +34,12 @@ func TestValidators_Encode(t *testing.T) {
 	require.NoError(t, DecodeValidators(encoded, vsOut))
 	// Check decoded matches encoded
 	var publicKeyPower []interface{}
-	vs.Iterate(func(publicKey crypto.PublicKey, power *big.Int) (stop bool) {
-		publicKeyPower = append(publicKeyPower, publicKey, power)
+	vs.Iterate(func(id crypto.Addressable, power *big.Int) (stop bool) {
+		publicKeyPower = append(publicKeyPower, id, power)
 		return
 	})
-	vsOut.Iterate(func(publicKey crypto.PublicKey, power *big.Int) (stop bool) {
-		assert.Equal(t, publicKeyPower[0], publicKey)
+	vsOut.Iterate(func(id crypto.Addressable, power *big.Int) (stop bool) {
+		assert.Equal(t, publicKeyPower[0], id)
 		assert.Equal(t, publicKeyPower[1], power)
 		publicKeyPower = publicKeyPower[2:]
 		return
