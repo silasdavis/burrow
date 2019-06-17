@@ -3,9 +3,12 @@
 package forensics
 
 import (
+	"encoding/hex"
 	"fmt"
 	"path"
 	"testing"
+
+	"github.com/magiconair/properties/assert"
 
 	"github.com/hyperledger/burrow/config/source"
 	"github.com/hyperledger/burrow/execution/state"
@@ -16,13 +19,53 @@ import (
 
 // This serves as a testbed for looking at non-deterministic burrow instances capture from the wild
 // Put the path to 'good' and 'bad' burrow directories here (containing the config files and .burrow dir)
-const goodDir = "/home/silas/burrows/t7-dev-studio-burrow-000/001"
-const badDir = "/home/silas/burrows/t7-dev-studio-burrow-000/003"
-const criticalBlock uint64 = 33675
+//const goodDir = "/home/silas/test-chain"
+const goodDir = "/home/silas/burrows/production-t9/burrow-t9-studio-001-good"
+const badDir = "/home/silas/burrows/production-t9/burrow-t9-studio-000-bad"
+const criticalBlock uint64 = 6
+
+func TestReplay_Compare(t *testing.T) {
+	badReplay := newReplay(t, badDir)
+	goodReplay := newReplay(t, goodDir)
+	badRecaps, err := badReplay.Blocks(1, criticalBlock+1)
+	require.NoError(t, err)
+	goodRecaps, err := goodReplay.Blocks(1, criticalBlock+1)
+	require.NoError(t, err)
+	//for i, goodRecap := range goodRecaps {
+	//	fmt.Printf("Good: %v\n", goodRecap)
+	//	fmt.Printf("Bad: %v\n", badRecaps[i])
+	//	assert.Equal(t, goodRecap, badRecaps[i])
+	//	for i, txe := range goodRecap.TxExecutions {
+	//		fmt.Printf("Tx %d: %v\n", i, txe.TxHash)
+	//		fmt.Println(txe.Envelope)
+	//	}
+	//	fmt.Println()
+	//}
+
+	txe := goodRecaps[5].TxExecutions[0]
+	assert.Equal(t, badRecaps[5].TxExecutions[0], txe)
+	fmt.Printf("%v\n", txe.Envelope.Signatories[0])
+}
+
+func TestDecipher(t *testing.T) {
+	hexmsg:= "7B22436861696E4944223A2270726F64756374696F6E2D74392D73747564696F2D627572726F772D364337333335222C2254797065223A2243616C6C5478222C225061796C6F6164223A7B22496E707574223A7B2241646472657373223A2236354139334431443333423633453932453942454335463938444633313638303033384530303431222C2253657175656E6365223A34307D2C2241646472657373223A2242413544333042313031393233363033444331333133313231334431334633443939354138344142222C224761734C696D6974223A393939393939392C2244617461223A224636373138374143303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303032303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030304534343635363136343643363936453635344637323631363336433635303030303030303030303030303030303030303030303030303030303030303030303030222C225741534D223A22227D7D"
+	bs, err := hex.DecodeString(hexmsg)
+	require.NoError(t, err)
+	fmt.Println(string(bs))
+}
 
 func TestReplay_Good(t *testing.T) {
 	replay := newReplay(t, goodDir)
 	recaps, err := replay.Blocks(2, criticalBlock+1)
+	require.NoError(t, err)
+	for _, recap := range recaps {
+		fmt.Println(recap.String())
+	}
+}
+
+func TestReplay_Bad(t *testing.T) {
+	replay := newReplay(t, badDir)
+	recaps, err := replay.Blocks(1, criticalBlock+1)
 	require.NoError(t, err)
 	for _, recap := range recaps {
 		fmt.Println(recap.String())
@@ -51,15 +94,6 @@ func TestReplay_Good_Block(t *testing.T) {
 
 func TestReplay_Bad_Block(t *testing.T) {
 	replayBlock(t, badDir, criticalBlock)
-}
-
-func TestReplay_Bad(t *testing.T) {
-	replay := newReplay(t, badDir)
-	recaps, err := replay.Blocks(1, criticalBlock+1)
-	require.NoError(t, err)
-	for _, recap := range recaps {
-		fmt.Println(recap.String())
-	}
 }
 
 func TestCriticalBlock(t *testing.T) {
@@ -98,5 +132,5 @@ func newReplay(t *testing.T, burrowDir string) *Replay {
 	genesisDoc := new(genesis.GenesisDoc)
 	err := source.FromFile(path.Join(burrowDir, "genesis.json"), genesisDoc)
 	require.NoError(t, err)
-	return NewReplay(path.Join(burrowDir, ".burrow", "data"), genesisDoc, logging.NewNoopLogger())
+	return NewReplay(path.Join(burrowDir, ".burrow"), genesisDoc, logging.NewNoopLogger())
 }
