@@ -134,13 +134,18 @@ func (vm *VM) fireCallEvent(eventSink EventSink, callType exec.CallType, errProv
 	errSink.PushError(eventErr)
 }
 
+func (vm *VM) Call(callState Interface, eventSink EventSink, caller, callee crypto.Address, code,
+	input []byte, value uint64, gas *uint64) (output []byte, err errors.CodedError) {
+	return vm.CallChipsBLah(callState, eventSink, caller, callee, code, input, value, gas)
+}
+
 // CONTRACT state is aware of caller and callee, so we can just mutate them.
 // CONTRACT code and input are not mutated.
 // CONTRACT returned 'ret' is a new compact slice.
 // value: To be transferred from caller to callee. Refunded upon errors.CodedError.
 // gas:   Available gas. No refunds for gas.
 // code: May be nil, since the CALL opcode may be used to send value from contracts to accounts
-func (vm *VM) Call(callState Interface, eventSink EventSink, caller, callee crypto.Address, code,
+func (vm *VM) CallChipsBLah(callState Interface, eventSink EventSink, caller, callee crypto.Address, code,
 	input []byte, value uint64, gas *uint64) (output []byte, err errors.CodedError) {
 
 	// Always return output - we may have a reverted exception for which the return is meaningful
