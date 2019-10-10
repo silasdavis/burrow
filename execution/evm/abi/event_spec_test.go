@@ -3,13 +3,13 @@ package abi
 import (
 	"testing"
 
-	"github.com/hyperledger/burrow/execution/solidity"
+	"github.com/hyperledger/burrow/tests/solidity_fixtures"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestEventSpec_Get(t *testing.T) {
-	spec, err := ReadSpec(solidity.Abi_EventEmitter)
+	spec, err := ReadSpec(solidity_fixtures.Abi_EventEmitter)
 	require.NoError(t, err)
 	eventSpec := spec.EventsByName["ManyTypes2"]
 

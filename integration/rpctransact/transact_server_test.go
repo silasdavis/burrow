@@ -15,11 +15,11 @@ import (
 	"github.com/hyperledger/burrow/integration"
 
 	"github.com/hyperledger/burrow/execution/exec"
-	"github.com/hyperledger/burrow/execution/solidity"
 	"github.com/hyperledger/burrow/integration/rpctest"
 	"github.com/hyperledger/burrow/rpc/rpcevents"
 	"github.com/hyperledger/burrow/rpc/rpcquery"
 	"github.com/hyperledger/burrow/rpc/rpctransact"
+	"github.com/hyperledger/burrow/tests/solidity_fixtures"
 	"github.com/hyperledger/burrow/txs"
 	"github.com/hyperledger/burrow/txs/payload"
 	"github.com/stretchr/testify/assert"
@@ -45,7 +45,7 @@ func TestTransactServer(t *testing.T) {
 		assert.False(t, acc.PublicKey.IsSet())
 
 		// Sign with this account - should set public key
-		_, err = rpctest.CreateContract(tcli, input.GetAddress(), solidity.Bytecode_StrangeLoop, nil)
+		_, err = rpctest.CreateContract(tcli, input.GetAddress(), solidity_fixtures.Bytecode_StrangeLoop, nil)
 		require.NoError(t, err)
 		acc, err = qcli.GetAccount(context.Background(), &rpcquery.GetAccountParam{Address: input.GetAddress()})
 

@@ -22,7 +22,7 @@ import (
 	. "github.com/hyperledger/burrow/execution/evm/asm/bc"
 	"github.com/hyperledger/burrow/execution/exec"
 	"github.com/hyperledger/burrow/execution/native"
-	"github.com/hyperledger/burrow/execution/solidity"
+	"github.com/hyperledger/burrow/tests/solidity_fixtures"
 	"github.com/hyperledger/burrow/txs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1407,11 +1407,11 @@ func TestEVM(t *testing.T) {
 		account2 := newAccount(t, st, "101")
 
 		// The solidity compiled contract. It calls bigmodexp with b,e,m inputs and compares the result with proof, where m is the mod, b the base, e the exp, and proof the expected result.
-		bytecode := solidity.DeployedBytecode_BigMod
+		bytecode := solidity_fixtures.DeployedBytecode_BigMod
 
 		// The function "expmod" is an assertion. It takes the base, exponent, modulus, and the expected value and
 		// returns 1 if the values match.
-		spec, err := abi.ReadSpec(solidity.Abi_BigMod)
+		spec, err := abi.ReadSpec(solidity_fixtures.Abi_BigMod)
 		require.NoError(t, err)
 
 		expModFunctionID := spec.Functions["expmod"].FunctionID

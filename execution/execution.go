@@ -414,7 +414,7 @@ func (exe *executor) GetAccount(address crypto.Address) (*acm.Account, error) {
 func (exe *executor) GetMetadata(metahash acmstate.MetadataHash) (string, error) {
 	exe.RLock()
 	defer exe.RUnlock()
-	return exe.stateCache.GetMetadata(metahash)
+	return exe.stateCache.GetMetadata(metahashWriter)
 }
 
 // Storage

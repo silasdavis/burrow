@@ -22,10 +22,10 @@ import (
 	"github.com/hyperledger/burrow/execution/evm/asm"
 	"github.com/hyperledger/burrow/execution/evm/asm/bc"
 	"github.com/hyperledger/burrow/execution/exec"
-	"github.com/hyperledger/burrow/execution/solidity"
 	"github.com/hyperledger/burrow/integration/rpctest"
 	"github.com/hyperledger/burrow/rpc/rpcquery"
 	"github.com/hyperledger/burrow/rpc/rpctransact"
+	"github.com/hyperledger/burrow/tests/solidity_fixtures"
 	"github.com/hyperledger/burrow/txs/payload"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -100,7 +100,7 @@ func testCallTx(t *testing.T, kern *core.Kernel, cli rpctransact.TransactClient)
 								Amount:  2,
 							},
 							Address:  nil,
-							Data:     solidity.Bytecode_StrangeLoop,
+							Data:     solidity_fixtures.Bytecode_StrangeLoop,
 							Fee:      2,
 							GasLimit: 10000,
 						})
@@ -128,7 +128,7 @@ func testCallTx(t *testing.T, kern *core.Kernel, cli rpctransact.TransactClient)
 			t.Parallel()
 			numGoroutines := 40
 			numRuns := 5
-			spec, err := abi.ReadSpec(solidity.Abi_StrangeLoop)
+			spec, err := abi.ReadSpec(solidity_fixtures.Abi_StrangeLoop)
 			require.NoError(t, err)
 			data, _, err := spec.Pack("UpsieDownsie")
 			require.NoError(t, err)
@@ -140,7 +140,7 @@ func testCallTx(t *testing.T, kern *core.Kernel, cli rpctransact.TransactClient)
 				go func() {
 					defer wg.Done()
 					for j := 0; j < numRuns; j++ {
-						createTxe, err := rpctest.CreateContract(cli, inputAddress, solidity.Bytecode_StrangeLoop, nil)
+						createTxe, err := rpctest.CreateContract(cli, inputAddress, solidity_fixtures.Bytecode_StrangeLoop, nil)
 						if err != nil {
 							errCh <- err
 							return
@@ -280,10 +280,10 @@ func testCallTx(t *testing.T, kern *core.Kernel, cli rpctransact.TransactClient)
 
 		t.Run("CallEvents", func(t *testing.T) {
 			t.Parallel()
-			createTxe, err := rpctest.CreateContract(cli, inputAddress, solidity.Bytecode_StrangeLoop, nil)
+			createTxe, err := rpctest.CreateContract(cli, inputAddress, solidity_fixtures.Bytecode_StrangeLoop, nil)
 			require.NoError(t, err)
 			address := lastCall(createTxe.Events).CallData.Callee
-			spec, err := abi.ReadSpec(solidity.Abi_StrangeLoop)
+			spec, err := abi.ReadSpec(solidity_fixtures.Abi_StrangeLoop)
 			require.NoError(t, err)
 			data, _, err := spec.Pack("UpsieDownsie")
 			require.NoError(t, err)
@@ -299,10 +299,10 @@ func testCallTx(t *testing.T, kern *core.Kernel, cli rpctransact.TransactClient)
 
 		t.Run("DeployAbis", func(t *testing.T) {
 			t.Parallel()
-			createTxe, err := rpctest.CreateContract(cli, inputAddress, solidity.Bytecode_A, []rpctest.MetadataMap{
-				{DeployedCode: solidity.DeployedBytecode_A, Abi: solidity.Abi_A},
-				{DeployedCode: solidity.DeployedBytecode_B, Abi: solidity.Abi_B},
-				{DeployedCode: solidity.DeployedBytecode_C, Abi: solidity.Abi_C},
+			createTxe, err := rpctest.CreateContract(cli, inputAddress, solidity_fixtures.Bytecode_A, []rpctest.MetadataMap{
+				{DeployedCode: solidity_fixtures.DeployedBytecode_A, Abi: solidity_fixtures.Abi_A},
+				{DeployedCode: solidity_fixtures.DeployedBytecode_B, Abi: solidity_fixtures.Abi_B},
+				{DeployedCode: solidity_fixtures.DeployedBytecode_C, Abi: solidity_fixtures.Abi_C},
 			})
 			require.NoError(t, err)
 			addressA := lastCall(createTxe.Events).CallData.Callee
@@ -310,9 +310,9 @@ func testCallTx(t *testing.T, kern *core.Kernel, cli rpctransact.TransactClient)
 			qcli := rpctest.NewQueryClient(t, kern.GRPCListenAddress().String())
 			res, err := qcli.GetMetadata(context.Background(), &rpcquery.GetMetadataParam{Address: &addressA})
 			require.NoError(t, err)
-			assert.Equal(t, res.Metadata, string(solidity.Abi_A))
+			assert.Equal(t, res.Metadata, string(solidity_fixtures.Abi_A))
 			// CreateB
-			spec, err := abi.ReadSpec(solidity.Abi_A)
+			spec, err := abi.ReadSpec(solidity_fixtures.Abi_A)
 			require.NoError(t, err)
 			data, _, err := spec.Pack("createB")
 			require.NoError(t, err)
@@ -323,9 +323,9 @@ func testCallTx(t *testing.T, kern *core.Kernel, cli rpctransact.TransactClient)
 			// check ABI for contract B
 			res, err = qcli.GetMetadata(context.Background(), &rpcquery.GetMetadataParam{Address: &addressB})
 			require.NoError(t, err)
-			assert.Equal(t, res.Metadata, string(solidity.Abi_B))
+			assert.Equal(t, res.Metadata, string(solidity_fixtures.Abi_B))
 			// CreateC
-			spec, err = abi.ReadSpec(solidity.Abi_B)
+			spec, err = abi.ReadSpec(solidity_fixtures.Abi_B)
 			require.NoError(t, err)
 			data, _, err = spec.Pack("createC")
 			require.NoError(t, err)
@@ -336,16 +336,16 @@ func testCallTx(t *testing.T, kern *core.Kernel, cli rpctransact.TransactClient)
 			// check abi for contract C
 			res, err = qcli.GetMetadata(context.Background(), &rpcquery.GetMetadataParam{Address: &addressC})
 			require.NoError(t, err)
-			assert.Equal(t, res.Metadata, string(solidity.Abi_C))
+			assert.Equal(t, res.Metadata, string(solidity_fixtures.Abi_C))
 			return
 		})
 
 		t.Run("LogEvents", func(t *testing.T) {
 			t.Parallel()
-			createTxe, err := rpctest.CreateContract(cli, inputAddress, solidity.Bytecode_StrangeLoop, nil)
+			createTxe, err := rpctest.CreateContract(cli, inputAddress, solidity_fixtures.Bytecode_StrangeLoop, nil)
 			require.NoError(t, err)
 			address := lastCall(createTxe.Events).CallData.Callee
-			spec, err := abi.ReadSpec(solidity.Abi_StrangeLoop)
+			spec, err := abi.ReadSpec(solidity_fixtures.Abi_StrangeLoop)
 			require.NoError(t, err)
 			data, _, err := spec.Pack("UpsieDownsie")
 			require.NoError(t, err)
@@ -367,10 +367,10 @@ func testCallTx(t *testing.T, kern *core.Kernel, cli rpctransact.TransactClient)
 
 		t.Run("EventEmitter", func(t *testing.T) {
 			t.Parallel()
-			createTxe, err := rpctest.CreateContract(cli, inputAddress, solidity.Bytecode_EventEmitter, nil)
+			createTxe, err := rpctest.CreateContract(cli, inputAddress, solidity_fixtures.Bytecode_EventEmitter, nil)
 			require.NoError(t, err)
 			address := lastCall(createTxe.Events).CallData.Callee
-			spec, err := abi.ReadSpec(solidity.Abi_EventEmitter)
+			spec, err := abi.ReadSpec(solidity_fixtures.Abi_EventEmitter)
 			require.NoError(t, err)
 			calldata, _, err := spec.Pack("EmitOne")
 			require.NoError(t, err)
@@ -406,10 +406,10 @@ func testCallTx(t *testing.T, kern *core.Kernel, cli rpctransact.TransactClient)
 			 * Any indexed string (or dynamic array) will be hashed, so we might want to store strings
 			 * in bytes32. This shows how we would automatically map this to string
 			 */
-			createTxe, err := rpctest.CreateContract(cli, inputAddress, solidity.Bytecode_EventEmitter, nil)
+			createTxe, err := rpctest.CreateContract(cli, inputAddress, solidity_fixtures.Bytecode_EventEmitter, nil)
 			require.NoError(t, err)
 			address := lastCall(createTxe.Events).CallData.Callee
-			spec, err := abi.ReadSpec(solidity.Abi_EventEmitter)
+			spec, err := abi.ReadSpec(solidity_fixtures.Abi_EventEmitter)
 			require.NoError(t, err)
 			calldata, _, err := spec.Pack("EmitOne")
 			require.NoError(t, err)
@@ -442,9 +442,9 @@ func testCallTx(t *testing.T, kern *core.Kernel, cli rpctransact.TransactClient)
 
 		t.Run("Revert", func(t *testing.T) {
 			t.Parallel()
-			txe, err := rpctest.CreateContract(cli, inputAddress, solidity.Bytecode_Revert, nil)
+			txe, err := rpctest.CreateContract(cli, inputAddress, solidity_fixtures.Bytecode_Revert, nil)
 			require.NoError(t, err)
-			spec, err := abi.ReadSpec(solidity.Abi_Revert)
+			spec, err := abi.ReadSpec(solidity_fixtures.Abi_Revert)
 			require.NoError(t, err)
 			data, _, err := spec.Pack("RevertAt", 4)
 			require.NoError(t, err)
@@ -460,9 +460,9 @@ func testCallTx(t *testing.T, kern *core.Kernel, cli rpctransact.TransactClient)
 
 		t.Run("RevertWithoutReason", func(t *testing.T) {
 			t.Parallel()
-			txe, err := rpctest.CreateContract(cli, inputAddress, solidity.Bytecode_Revert, nil)
+			txe, err := rpctest.CreateContract(cli, inputAddress, solidity_fixtures.Bytecode_Revert, nil)
 			require.NoError(t, err)
-			spec, err := abi.ReadSpec(solidity.Abi_Revert)
+			spec, err := abi.ReadSpec(solidity_fixtures.Abi_Revert)
 			require.NoError(t, err)
 			data, _, err := spec.Pack("RevertNoReason")
 			require.NoError(t, err)
@@ -488,7 +488,7 @@ func BenchmarkCreateContract(b *testing.B) {
 				Amount:  2,
 			},
 			Address:  nil,
-			Data:     solidity.Bytecode_StrangeLoop,
+			Data:     solidity_fixtures.Bytecode_StrangeLoop,
 			Fee:      2,
 			GasLimit: 10000,
 		})

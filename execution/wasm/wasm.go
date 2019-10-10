@@ -71,7 +71,7 @@ func RunWASM(state acmstate.ReaderWriter, address crypto.Address, createContract
 	// WASM
 	config := exec.VMConfig{
 		DisableFloatingPoint: true,
-		MaxMemoryPages:       2,
+		MaxMemoryPages:       200,
 		DefaultMemoryPages:   2,
 	}
 
@@ -100,7 +100,7 @@ func RunWASM(state acmstate.ReaderWriter, address crypto.Address, createContract
 	}
 	entryID, ok := vm.GetFunctionExport(wasmFunc)
 	if !ok {
-		return nil, errors.Codes.UnresolvedSymbols
+		return nil, errors.Errorf(errors.Codes.UnresolvedSymbols, "cannot find %s", wasmFunc)
 	}
 
 	// The 0 argument is the offset where our calldata is stored (if any)

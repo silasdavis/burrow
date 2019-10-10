@@ -158,17 +158,29 @@ docker_build: check commit_hash
 
 # Solidity fixtures
 .PHONY: solidity
-solidity: $(patsubst %.sol, %.sol.go, $(wildcard ./execution/solidity/*.sol))
+solidity: $(patsubst %.sol, %.sol.go, $(wildcard ./tests/solidity_fixtures/*.sol))
 
 %.sol.go: %.sol
 	@go run ./deploy/compile/solgo/main.go $^
 
 # Solang fixtures
 .PHONY: solang
-solang: $(patsubst %.solang, %.solang.go, $(wildcard ./execution/wasm/*.solang))
+solang: $(patsubst %.solang, %.solang.go, $(wildcard ./tests/wasm_fixtures/*.solang))
 
 %.solang.go: %.solang
 	@go run ./deploy/compile/solgo/main.go -wasm $^
+
+# WASM fixtures
+# Build with:
+# rustup update
+# rustup target add wasm32-unknown-unknown
+# cargo build --target wasm32-unknown-unknown --release
+
+.PHONY: wasm
+wasm: $(patsubst %.wasm, %.wasm.go, $(wildcard ./tests/wasm_fixtures/*.wasm))
+
+%.wasm.go: %.wasm
+	@go run ./execution/wasm/slurp/cmd $^
 
 # node/js
 #

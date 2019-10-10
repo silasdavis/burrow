@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/hyperledger/burrow/event/query"
-	"github.com/hyperledger/burrow/execution/solidity"
+	"github.com/hyperledger/burrow/tests/solidity_fixtures"
 
 	"github.com/hyperledger/burrow/crypto"
 	"github.com/hyperledger/burrow/permission"
@@ -63,7 +63,7 @@ func TestAccountTags(t *testing.T) {
 	perms.Roles = []string{"frogs", "dogs"}
 	acc := &Account{
 		Permissions: perms,
-		EVMCode:     solidity.Bytecode_StrangeLoop,
+		EVMCode:     solidity_fixtures.Bytecode_StrangeLoop,
 	}
 	flag, _ := acc.Get("Permissions")
 	permString := permission.String(flag.(permission.PermFlag))

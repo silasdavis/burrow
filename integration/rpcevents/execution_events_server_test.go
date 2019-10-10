@@ -21,11 +21,11 @@ import (
 	"github.com/hyperledger/burrow/execution/errors"
 	"github.com/hyperledger/burrow/execution/evm/abi"
 	"github.com/hyperledger/burrow/execution/exec"
-	"github.com/hyperledger/burrow/execution/solidity"
 	"github.com/hyperledger/burrow/integration"
 	"github.com/hyperledger/burrow/integration/rpctest"
 	"github.com/hyperledger/burrow/rpc/rpcevents"
 	"github.com/hyperledger/burrow/rpc/rpctransact"
+	"github.com/hyperledger/burrow/tests/solidity_fixtures"
 	"github.com/hyperledger/burrow/txs/payload"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -165,9 +165,9 @@ func TestExecutionEventsTest(t *testing.T) {
 		})
 
 		t.Run("Revert", func(t *testing.T) {
-			txe, err := rpctest.CreateContract(tcli, inputAddress0, solidity.Bytecode_Revert, nil)
+			txe, err := rpctest.CreateContract(tcli, inputAddress0, solidity_fixtures.Bytecode_Revert, nil)
 			require.NoError(t, err)
-			spec, err := abi.ReadSpec(solidity.Abi_Revert)
+			spec, err := abi.ReadSpec(solidity_fixtures.Abi_Revert)
 			require.NoError(t, err)
 			data, _, err := spec.Pack("RevertAt", 4)
 			require.NoError(t, err)

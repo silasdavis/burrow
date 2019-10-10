@@ -1,4 +1,4 @@
-package wasm
+package wasm_fixtures
 
 import hex "github.com/tmthrgd/go-hex"
 

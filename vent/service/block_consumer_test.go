@@ -9,8 +9,8 @@ import (
 	"github.com/hyperledger/burrow/crypto"
 	"github.com/hyperledger/burrow/execution/evm/abi"
 	"github.com/hyperledger/burrow/execution/exec"
-	"github.com/hyperledger/burrow/execution/solidity"
 	"github.com/hyperledger/burrow/logging"
+	"github.com/hyperledger/burrow/tests/solidity_fixtures"
 	"github.com/hyperledger/burrow/vent/sqlsol"
 	"github.com/hyperledger/burrow/vent/types"
 	"github.com/stretchr/testify/assert"
@@ -22,7 +22,7 @@ func TestBlockConsumer(t *testing.T) {
 	doneCh := make(chan struct{})
 	eventCh := make(chan types.EventData, 100)
 
-	spec, err := abi.ReadSpec(solidity.Abi_EventEmitter)
+	spec, err := abi.ReadSpec(solidity_fixtures.Abi_EventEmitter)
 	require.NoError(t, err)
 
 	type args struct {
@@ -64,7 +64,7 @@ func TestBlockConsumer(t *testing.T) {
 		},
 	}
 	t.Run("Consume matching event", func(t *testing.T) {
-		spec, err := abi.ReadSpec(solidity.Abi_EventEmitter)
+		spec, err := abi.ReadSpec(solidity_fixtures.Abi_EventEmitter)
 		require.NoError(t, err)
 
 		longFilter := "(Log1Text = 'a' OR Log1Text = 'b' OR Log1Text = 'c' OR Log1Text = 'frogs') AND EventName = 'ManyTypes'"
@@ -87,7 +87,7 @@ func TestBlockConsumer(t *testing.T) {
 	})
 
 	t.Run("Consume matching event without ABI", func(t *testing.T) {
-		spec, err := abi.ReadSpec(solidity.Abi_EventEmitter)
+		spec, err := abi.ReadSpec(solidity_fixtures.Abi_EventEmitter)
 		require.NoError(t, err)
 
 		// Remove the ABI
@@ -110,7 +110,7 @@ func TestBlockConsumer(t *testing.T) {
 	})
 
 	t.Run("Consume non-matching event without ABI", func(t *testing.T) {
-		spec, err := abi.ReadSpec(solidity.Abi_EventEmitter)
+		spec, err := abi.ReadSpec(solidity_fixtures.Abi_EventEmitter)
 		require.NoError(t, err)
 
 		// Remove the ABI
@@ -147,7 +147,7 @@ func TestBlockConsumer(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		spec, err := abi.ReadSpec(solidity.Abi_EventEmitter)
+		spec, err := abi.ReadSpec(solidity_fixtures.Abi_EventEmitter)
 		require.NoError(t, err)
 
 		blockConsumer := NewBlockConsumer(projection, sqlsol.None, spec.GetEventAbi, eventCh, doneCh, logger)

@@ -4,14 +4,14 @@ import (
 	"testing"
 
 	"github.com/hyperledger/burrow/execution/evm/abi"
-	"github.com/hyperledger/burrow/execution/solidity"
+	"github.com/hyperledger/burrow/tests/solidity_fixtures"
 	"github.com/hyperledger/burrow/vent/sqlsol"
 	"github.com/hyperledger/burrow/vent/types"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateSpecFromAbis(t *testing.T) {
-	spec, err := abi.ReadSpec(solidity.Abi_EventEmitter)
+	spec, err := abi.ReadSpec(solidity_fixtures.Abi_EventEmitter)
 	require.NoError(t, err)
 
 	project, err := sqlsol.GenerateSpecFromAbis(spec)

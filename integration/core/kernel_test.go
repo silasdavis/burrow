@@ -16,7 +16,6 @@ import (
 	"github.com/hyperledger/burrow/config"
 	"github.com/hyperledger/burrow/event"
 	"github.com/hyperledger/burrow/execution/exec"
-	"github.com/hyperledger/burrow/execution/solidity"
 	"github.com/hyperledger/burrow/genesis"
 	"github.com/hyperledger/burrow/integration"
 	"github.com/hyperledger/burrow/integration/rpctest"
@@ -25,6 +24,7 @@ import (
 	"github.com/hyperledger/burrow/logging/logconfig"
 	"github.com/hyperledger/burrow/logging/loggers"
 	"github.com/hyperledger/burrow/rpc/rpctransact"
+	"github.com/hyperledger/burrow/tests/solidity_fixtures"
 	"github.com/hyperledger/burrow/txs/payload"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -167,7 +167,7 @@ func bootWaitBlocksShutdown(t testing.TB, validator *acm.PrivateAccount, private
 					Amount:  2,
 				},
 				Address:  nil,
-				Data:     solidity.Bytecode_StrangeLoop,
+				Data:     solidity_fixtures.Bytecode_StrangeLoop,
 				Fee:      2,
 				GasLimit: 10000,
 			})
