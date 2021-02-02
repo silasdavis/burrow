@@ -1,0 +1,58 @@
+jobs:
+
+- name: evmcontract
+  deploy:
+    contract: evm.sol
+
+- name: wasmcontract
+  deploy:
+    contract: ewasm.sol
+    wasm: true
+
+- name: queryInt
+  query-contract:
+    destination: $evmcontract
+    function: get_number
+
+- name: assertZeroInt
+  assert:
+    key: $queryInt
+    relation: eq
+    val: 102
+
+- name: queryUInt
+  query-contract:
+    destination: $wasmcontract
+    function: get_number
+
+- name: assertZeroUInt
+  assert:
+    key: $queryUInt
+    relation: eq
+    val: 54321
+
+- name: call_ewasm_from_evm
+  query-contract:
+    destination: $evmcontract
+    function: call_get_number
+    data:
+    - $wasmcontract
+
+- name: assertZeroInt3
+  assert:
+    key: $call_ewasm_from_evm
+    relation: eq
+    val: 54321
+
+- name: call_evm_from_ewasm
+  query-contract:
+    destination: $wasmcontract
+    function: call_get_number
+    data:
+    - $evmcontract
+
+- name: assertZeroInt2
+  assert:
+    key: $call_evm_from_ewasm
+    relation: eq
+    val: 102

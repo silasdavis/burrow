@@ -91,9 +91,10 @@ func (ctx *context) ResolveFunc(module, field string) lifeExec.FunctionImport {
 			target := crypto.MustAddressFromBytes(vm.Memory[addressPtr : addressPtr+crypto.AddressLength])
 
 			// TODO: is this guaranteed to be okay? Should be avoid panic here if out of bounds?
-			value := bin.BigIntFromLittleEndianBytes(vm.Memory[valuePtr:ValueByteSize])
+			value := bin.BigIntFromLittleEndianBytes(vm.Memory[valuePtr : valuePtr+ValueByteSize])
 
 			var err error
+
 			ctx.returnData, err = engine.CallFromSite(ctx.state, ctx.vm, ctx.params, engine.CallParams{
 				CallType: exec.CallTypeCall,
 				Callee:   target,
