@@ -81,9 +81,7 @@ func (ctx *context) ResolveFunc(module, field string) lifeExec.FunctionImport {
 	switch field {
 	case "call":
 		return func(vm *lifeExec.VirtualMachine) int64 {
-			// FIXME: gasLimit is being set to 0, solang issue or elsewhere?
-			//gasLimit := big.NewInt(vm.GetCurrentFrame().Locals[0])
-			gasLimit := big.NewInt(23020302030)
+			gasLimit := big.NewInt(vm.GetCurrentFrame().Locals[0])
 			addressPtr := uint32(vm.GetCurrentFrame().Locals[1])
 			valuePtr := int(uint32(vm.GetCurrentFrame().Locals[2]))
 			dataPtr := uint32(vm.GetCurrentFrame().Locals[3])
