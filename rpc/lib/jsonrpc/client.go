@@ -1,7 +1,8 @@
-package client
+package jsonrpc
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -15,13 +16,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-// HTTPClient is a common interface for JSONRPCClient and URIClient.
+// HTTPClient is a common interface for Client and URIClient.
 type HTTPClient interface {
 	Call(method string, params map[string]interface{}, result interface{}) (interface{}, error)
 }
 
 // TODO: Deprecate support for IP:PORT or /path/to/socket
-func makeHTTPDialer(remoteAddr string) (string, func(string, string) (net.Conn, error)) {
+func MakeHTTPDialer(remoteAddr string) (string, func(context.Context, string, string) (net.Conn, error)) {
 	parts := strings.SplitN(remoteAddr, "://", 2)
 	var protocol, address string
 	if len(parts) == 1 {
@@ -32,7 +33,7 @@ func makeHTTPDialer(remoteAddr string) (string, func(string, string) (net.Conn, 
 	} else {
 		// return a invalid message
 		msg := fmt.Sprintf("Invalid addr: %s", remoteAddr)
-		return msg, func(_ string, _ string) (net.Conn, error) {
+		return msg, func(_ context.Context, _ string, _ string) (net.Conn, error) {
 			return nil, errors.New(msg)
 		}
 	}
@@ -43,40 +44,41 @@ func makeHTTPDialer(remoteAddr string) (string, func(string, string) (net.Conn, 
 
 	// replace / with . for http requests (kvstore domain)
 	trimmedAddress := strings.Replace(address, "/", ".", -1)
-	return trimmedAddress, func(proto, addr string) (net.Conn, error) {
-		return net.Dial(protocol, address)
+	return trimmedAddress, func(ctx context.Context, proto, addr string) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, protocol, address)
 	}
 }
 
 // We overwrite the http.Client.Dial so we can do http over tcp or unix.
 // remoteAddr should be fully featured (eg. with tcp:// or unix://)
 func makeHTTPClient(remoteAddr string) (string, *http.Client) {
-	address, dialer := makeHTTPDialer(remoteAddr)
+	address, dialer := MakeHTTPDialer(remoteAddr)
 	return "http://" + address, &http.Client{
 		Transport: &http.Transport{
-			Dial: dialer,
+			DialContext: dialer,
 		},
 	}
 }
 
 //------------------------------------------------------------------------------------
 
-// JSONRPCClient takes params as a slice
-type JSONRPCClient struct {
+// Client takes params as a slice
+type Client struct {
 	address string
 	client  *http.Client
 }
 
-// NewJSONRPCClient returns a JSONRPCClient pointed at the given address.
-func NewJSONRPCClient(remote string) *JSONRPCClient {
+// NewClient returns a Client pointed at the given address.
+func NewClient(remote string) *Client {
 	address, client := makeHTTPClient(remote)
-	return &JSONRPCClient{
+	return &Client{
 		address: address,
 		client:  client,
 	}
 }
 
-func (c *JSONRPCClient) Call(method string, params map[string]interface{}, result interface{}) (interface{}, error) {
+func (c *Client) Call(method string, params map[string]interface{}, result interface{}) (interface{}, error) {
 	request, err := types.MapToRequest("jsonrpc-client", method, params)
 	if err != nil {
 		return nil, err

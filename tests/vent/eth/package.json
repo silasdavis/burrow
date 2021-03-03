@@ -1,0 +1,16 @@
+{
+  "name": "eth",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/mocha": "^8.2.1",
+    "eslint": "^7.21.0",
+    "eslint-config-airbnb-base": "^14.2.1",
+    "eslint-plugin-import": "^2.22.1",
+    "eslint-plugin-prettier": "^3.3.1",
+    "eslint-plugin-truffle": "^0.3.1",
+    "prettier": "^2.2.1",
+    "truffle": "^5.2.2"
+  }
+}

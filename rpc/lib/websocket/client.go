@@ -1,4 +1,4 @@
-package client
+package websocket
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/hyperledger/burrow/rpc/lib/jsonrpc"
 
 	"github.com/gorilla/websocket"
 	"github.com/hyperledger/burrow/rpc/lib/types"
@@ -70,14 +72,16 @@ type WSClient struct {
 	pingPeriod time.Duration
 }
 
-// NewWSClient returns a new client. See the commentary on the func(*WSClient)
+// NewClient returns a new client. See the commentary on the func(*WSClient)
 // functions for a detailed description of how to configure ping period and
 // pong wait time. The endpoint argument must begin with a `/`.
-func NewWSClient(remoteAddr, endpoint string, options ...func(*WSClient)) *WSClient {
-	addr, dialer := makeHTTPDialer(remoteAddr)
+func NewClient(remoteAddr, endpoint string, options ...func(*WSClient)) *WSClient {
+	addr, dialer := jsonrpc.MakeHTTPDialer(remoteAddr)
 	c := &WSClient{
-		Address:              addr,
-		Dialer:               dialer,
+		Address: addr,
+		Dialer: func(protocol string, address string) (net.Conn, error) {
+			return dialer(context.Background(), protocol, address)
+		},
 		Endpoint:             endpoint,
 		PingPongLatencyTimer: metrics.NewTimer(),
 

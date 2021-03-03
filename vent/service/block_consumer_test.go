@@ -11,6 +11,7 @@ import (
 	"github.com/hyperledger/burrow/execution/exec"
 	"github.com/hyperledger/burrow/execution/solidity"
 	"github.com/hyperledger/burrow/logging"
+	"github.com/hyperledger/burrow/vent/chain"
 	"github.com/hyperledger/burrow/vent/sqlsol"
 	"github.com/hyperledger/burrow/vent/types"
 	"github.com/stretchr/testify/assert"
@@ -169,7 +170,7 @@ const timeout = time.Second
 
 var errTimeout = fmt.Errorf("timed out after %s waiting for consumer to emit block event", timeout)
 
-func consumeBlock(blockConsumer func(*exec.BlockExecution) error, eventCh <-chan types.EventData,
+func consumeBlock(blockConsumer func(block chain.Block) error, eventCh <-chan types.EventData,
 	logEvents ...*exec.LogEvent) (map[string]types.EventDataTable, error) {
 
 	block := &exec.BlockExecution{
@@ -185,7 +186,7 @@ func consumeBlock(blockConsumer func(*exec.BlockExecution) error, eventCh <-chan
 		}
 		block.AppendTxs(txe)
 	}
-	err := blockConsumer(block)
+	err := blockConsumer(chain.NewBurrowBlock(block))
 	if err != nil {
 		return nil, err
 	}

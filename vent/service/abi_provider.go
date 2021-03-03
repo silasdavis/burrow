@@ -8,6 +8,7 @@ import (
 	"github.com/hyperledger/burrow/execution/evm/abi"
 	"github.com/hyperledger/burrow/logging"
 	"github.com/hyperledger/burrow/rpc/rpcquery"
+	"github.com/hyperledger/burrow/vent/chain"
 )
 
 type EventSpecGetter func(abi.EventID, crypto.Address) (*abi.EventSpec, error)
@@ -15,13 +16,13 @@ type EventSpecGetter func(abi.EventID, crypto.Address) (*abi.EventSpec, error)
 // AbiProvider provides a method for loading ABIs from disk, and retrieving them from burrow on-demand
 type AbiProvider struct {
 	abiSpec *abi.Spec
-	cli     rpcquery.QueryClient
+	chain   chain.Chain
 	logger  *logging.Logger
 }
 
 // NewAbiProvider loads ABIs from the filesystem. A set of zero or more files or directories can be passed in the path
 // argument. If an event is encountered for which no ABI is known, it is retrieved from burrow
-func NewAbiProvider(paths []string, cli rpcquery.QueryClient, logger *logging.Logger) (provider *AbiProvider, err error) {
+func NewAbiProvider(paths []string, chain chain.Chain, logger *logging.Logger) (provider *AbiProvider, err error) {
 	abiSpec := abi.NewSpec()
 	if len(paths) > 0 {
 		abiSpec, err = abi.LoadPath(paths...)
@@ -32,7 +33,7 @@ func NewAbiProvider(paths []string, cli rpcquery.QueryClient, logger *logging.Lo
 
 	provider = &AbiProvider{
 		abiSpec: abiSpec,
-		cli:     cli,
+		chain:   chain,
 		logger:  logger.WithScope("NewAbiProvider"),
 	}
 	return
@@ -43,7 +44,7 @@ func NewAbiProvider(paths []string, cli rpcquery.QueryClient, logger *logging.Lo
 func (p *AbiProvider) GetEventAbi(eventID abi.EventID, address crypto.Address) (*abi.EventSpec, error) {
 	evAbi, ok := p.abiSpec.EventsByID[eventID]
 	if !ok {
-		resp, err := p.cli.GetMetadata(context.Background(), &rpcquery.GetMetadataParam{Address: &address})
+		resp, err := p.chain.GetMetadata(context.Background(), &rpcquery.GetMetadataParam{Address: &address})
 		if err != nil {
 			p.logger.InfoMsg("Error retrieving abi for event", "address", address.String(), "eventid", eventID.String(), "error", err)
 			return nil, err

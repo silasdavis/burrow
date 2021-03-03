@@ -13,14 +13,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperledger/burrow/rpc"
+	"github.com/hyperledger/burrow/rpc/lib/jsonrpc"
+
 	tmjson "github.com/tendermint/tendermint/libs/json"
 
 	"github.com/hyperledger/burrow/integration"
 	"github.com/hyperledger/burrow/txs/payload"
 
 	"github.com/hyperledger/burrow/core"
-
-	"github.com/hyperledger/burrow/rpc/lib/client"
 
 	"github.com/hyperledger/burrow/binary"
 	"github.com/hyperledger/burrow/event"
@@ -41,9 +42,9 @@ func TestInfoServer(t *testing.T) {
 	defer shutdown()
 	inputAddress := rpctest.PrivateAccounts[0].GetAddress()
 	infoAddress := kern.InfoListenAddress().String()
-	var clients = map[string]infoclient.RPCClient{
-		"JSON RPC": client.NewJSONRPCClient(infoAddress),
-		"URI":      client.NewURIClient(infoAddress),
+	var clients = map[string]rpc.Client{
+		"JSON RPC": jsonrpc.NewClient(infoAddress),
+		"URI":      jsonrpc.NewURIClient(infoAddress),
 	}
 	cli := rpctest.NewTransactClient(t, kern.GRPCListenAddress().String())
 	for clientName, rpcClient := range clients {

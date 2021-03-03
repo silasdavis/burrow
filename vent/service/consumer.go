@@ -7,28 +7,26 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hyperledger/burrow/encoding"
-
-	"github.com/hyperledger/burrow/rpc"
-
 	"github.com/hyperledger/burrow/logging"
+	"github.com/hyperledger/burrow/logging/structure"
+	"github.com/hyperledger/burrow/rpc"
 	"github.com/hyperledger/burrow/rpc/rpcevents"
 	"github.com/hyperledger/burrow/rpc/rpcquery"
+	"github.com/hyperledger/burrow/vent/chain"
 	"github.com/hyperledger/burrow/vent/config"
 	"github.com/hyperledger/burrow/vent/sqldb"
 	"github.com/hyperledger/burrow/vent/sqlsol"
 	"github.com/hyperledger/burrow/vent/types"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 )
 
 // Consumer contains basic configuration for consumer to run
 type Consumer struct {
-	Config         *config.VentConfig
-	Logger         *logging.Logger
-	DB             *sqldb.SQLDB
-	GRPCConnection *grpc.ClientConn
+	Config *config.VentConfig
+	Logger *logging.Logger
+	DB     *sqldb.SQLDB
+	Chain  chain.Chain
 	// external events channel used for when vent is leveraged as a library
 	EventsChannel chan types.EventData
 	Done          chan struct{}
@@ -62,21 +60,20 @@ func (c *Consumer) Run(projection *sqlsol.Projection, stream bool) error {
 
 	c.Logger.InfoMsg("Connecting to Burrow gRPC server")
 
-	c.GRPCConnection, err = encoding.GRPCDial(c.Config.GRPCAddr)
+	c.Chain, err = chain.NewBurrow(c.Config.GRPCAddr)
 	if err != nil {
 		return errors.Wrapf(err, "Error connecting to Burrow gRPC server at %s", c.Config.GRPCAddr)
 	}
-	defer c.GRPCConnection.Close()
+	defer c.Chain.Close()
 	defer close(c.EventsChannel)
 
 	// get the chain ID to compare with the one stored in the db
-	qCli := rpcquery.NewQueryClient(c.GRPCConnection)
-	c.Status.Burrow, err = qCli.Status(context.Background(), &rpcquery.StatusParam{})
+	c.Status.Burrow, err = c.Chain.Status(context.Background(), &rpcquery.StatusParam{})
 	if err != nil {
 		return errors.Wrapf(err, "Error getting chain status")
 	}
 
-	abiProvider, err := NewAbiProvider(c.Config.AbiFileOrDirs, rpcquery.NewQueryClient(c.GRPCConnection), c.Logger)
+	abiProvider, err := NewAbiProvider(c.Config.AbiFileOrDirs, c.Chain, c.Logger)
 	if err != nil {
 		return errors.Wrapf(err, "Error loading ABIs")
 	}
@@ -150,7 +147,6 @@ func (c *Consumer) Run(projection *sqlsol.Projection, stream bool) error {
 		}
 
 		// setup block range to get needed blocks server side
-		cli := rpcevents.NewExecutionEventsClient(c.GRPCConnection)
 		var end *rpcevents.Bound
 		if stream {
 			end = rpcevents.StreamBound()
@@ -162,18 +158,10 @@ func (c *Consumer) Run(projection *sqlsol.Projection, stream bool) error {
 			BlockRange: rpcevents.NewBlockRange(rpcevents.AbsoluteBound(startingBlock), end),
 		}
 
-		// gets blocks in given range based on last processed block taken from database
-		stream, err := cli.Stream(context.Background(), request)
-		if err != nil {
-			errCh <- errors.Wrapf(err, "Error connecting to block stream")
-			return
-		}
-
-		// get blocks
-
 		c.Logger.TraceMsg("Waiting for blocks...")
 
-		err = rpcevents.ConsumeBlockExecutions(stream,
+		// gets blocks in given range based on last processed block taken from database
+		err = c.Chain.ConsumeBlockExecutions(context.Background(), request,
 			NewBlockConsumer(projection, c.Config.SpecOpt, abiProvider.GetEventAbi, eventCh, c.Done, c.Logger))
 
 		if err != nil {
@@ -249,11 +237,11 @@ func (c *Consumer) Health() error {
 	}
 
 	// check grpc connection status
-	if c.GRPCConnection == nil {
+	if c.Chain == nil {
 		return errors.New("grpc disconnected")
 	}
 
-	if grpcState := c.GRPCConnection.GetState(); grpcState != connectivity.Ready {
+	if grpcState := c.Chain.Connectivity(); grpcState != connectivity.Ready {
 		return errors.New("grpc connection not ready")
 	}
 
@@ -265,12 +253,15 @@ func (c *Consumer) Shutdown() {
 	c.shutdownOnce.Do(func() {
 		c.Logger.InfoMsg("Shutting down vent consumer...")
 		close(c.Done)
-		c.GRPCConnection.Close()
+		err := c.Chain.Close()
+		if err != nil {
+			c.Logger.InfoMsg("Could not close Chain connection", structure.ErrorKey, err)
+		}
 	})
 }
 
-func (c *Consumer) updateStatus(qcli rpcquery.QueryClient) {
-	stat, err := qcli.Status(context.Background(), &rpcquery.StatusParam{})
+func (c *Consumer) updateStatus() {
+	stat, err := c.Chain.Status(context.Background(), &rpcquery.StatusParam{})
 	if err != nil {
 		c.Logger.InfoMsg("could not get blockchain status", "err", err)
 		return
@@ -300,12 +291,11 @@ func (c *Consumer) statusMessage() []interface{} {
 
 func (c *Consumer) announceEvery(doneCh <-chan struct{}) {
 	if c.Config.AnnounceEvery != 0 {
-		qcli := rpcquery.NewQueryClient(c.GRPCConnection)
 		ticker := time.NewTicker(c.Config.AnnounceEvery)
 		for {
 			select {
 			case <-ticker.C:
-				c.updateStatus(qcli)
+				c.updateStatus()
 				c.Logger.InfoMsg("Announcement", c.statusMessage()...)
 			case <-doneCh:
 				ticker.Stop()

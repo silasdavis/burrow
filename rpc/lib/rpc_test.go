@@ -13,10 +13,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hyperledger/burrow/rpc/lib/jsonrpc"
+	"github.com/hyperledger/burrow/rpc/lib/websocket"
+
 	"github.com/hyperledger/burrow/logging/logconfig"
 	"github.com/hyperledger/burrow/process"
 
-	"github.com/hyperledger/burrow/rpc/lib/client"
 	"github.com/hyperledger/burrow/rpc/lib/server"
 	"github.com/hyperledger/burrow/rpc/lib/types"
 	"github.com/stretchr/testify/assert"
@@ -138,7 +140,7 @@ func setup() {
 	time.Sleep(time.Second * 2)
 }
 
-func echoViaHTTP(cl client.HTTPClient, val string) (string, error) {
+func echoViaHTTP(cl jsonrpc.HTTPClient, val string) (string, error) {
 	params := map[string]interface{}{
 		"arg": val,
 	}
@@ -149,7 +151,7 @@ func echoViaHTTP(cl client.HTTPClient, val string) (string, error) {
 	return result.Value, nil
 }
 
-func echoIntViaHTTP(cl client.HTTPClient, val int) (int, error) {
+func echoIntViaHTTP(cl jsonrpc.HTTPClient, val int) (int, error) {
 	params := map[string]interface{}{
 		"arg": val,
 	}
@@ -160,7 +162,7 @@ func echoIntViaHTTP(cl client.HTTPClient, val int) (int, error) {
 	return result.Value, nil
 }
 
-func echoBytesViaHTTP(cl client.HTTPClient, bytes []byte) ([]byte, error) {
+func echoBytesViaHTTP(cl jsonrpc.HTTPClient, bytes []byte) ([]byte, error) {
 	params := map[string]interface{}{
 		"arg": bytes,
 	}
@@ -171,7 +173,7 @@ func echoBytesViaHTTP(cl client.HTTPClient, bytes []byte) ([]byte, error) {
 	return result.Value, nil
 }
 
-func echoDataBytesViaHTTP(cl client.HTTPClient, bytes cmn.HexBytes) (cmn.HexBytes, error) {
+func echoDataBytesViaHTTP(cl jsonrpc.HTTPClient, bytes cmn.HexBytes) (cmn.HexBytes, error) {
 	params := map[string]interface{}{
 		"arg": bytes,
 	}
@@ -182,7 +184,7 @@ func echoDataBytesViaHTTP(cl client.HTTPClient, bytes cmn.HexBytes) (cmn.HexByte
 	return result.Value, nil
 }
 
-func testWithHTTPClient(t *testing.T, cl client.HTTPClient) {
+func testWithHTTPClient(t *testing.T, cl jsonrpc.HTTPClient) {
 	val := "acbd"
 	got, err := echoViaHTTP(cl, val)
 	require.Nil(t, err)
@@ -204,7 +206,7 @@ func testWithHTTPClient(t *testing.T, cl client.HTTPClient) {
 	assert.Equal(t, val4, got4)
 }
 
-func echoViaWS(cl *client.WSClient, val string) (string, error) {
+func echoViaWS(cl *websocket.WSClient, val string) (string, error) {
 	params := map[string]interface{}{
 		"arg": val,
 	}
@@ -226,7 +228,7 @@ func echoViaWS(cl *client.WSClient, val string) (string, error) {
 	return result.Value, nil
 }
 
-func echoBytesViaWS(cl *client.WSClient, bytes []byte) ([]byte, error) {
+func echoBytesViaWS(cl *websocket.WSClient, bytes []byte) ([]byte, error) {
 	params := map[string]interface{}{
 		"arg": bytes,
 	}
@@ -248,7 +250,7 @@ func echoBytesViaWS(cl *client.WSClient, bytes []byte) ([]byte, error) {
 	return result.Value, nil
 }
 
-func testWithWSClient(t *testing.T, cl *client.WSClient) {
+func testWithWSClient(t *testing.T, cl *websocket.WSClient) {
 	val := "acbd"
 	got, err := echoViaWS(cl, val)
 	require.Nil(t, err)
@@ -265,15 +267,15 @@ func testWithWSClient(t *testing.T, cl *client.WSClient) {
 func TestServersAndClientsBasic(t *testing.T) {
 	serverAddrs := [...]string{tcpAddr, unixAddr}
 	for _, addr := range serverAddrs {
-		cl1 := client.NewURIClient(addr)
+		cl1 := jsonrpc.NewURIClient(addr)
 		fmt.Printf("=== testing server on %s using %v client", addr, cl1)
 		testWithHTTPClient(t, cl1)
 
-		cl2 := client.NewJSONRPCClient(addr)
+		cl2 := jsonrpc.NewClient(addr)
 		fmt.Printf("=== testing server on %s using %v client", addr, cl2)
 		testWithHTTPClient(t, cl2)
 
-		cl3 := client.NewWSClient(addr, websocketEndpoint)
+		cl3 := websocket.NewClient(addr, websocketEndpoint)
 		cl3.SetLogger(log.TestingLogger())
 		err := cl3.Start()
 		require.Nil(t, err)
@@ -284,7 +286,7 @@ func TestServersAndClientsBasic(t *testing.T) {
 }
 
 func TestHexStringArg(t *testing.T) {
-	cl := client.NewURIClient(tcpAddr)
+	cl := jsonrpc.NewURIClient(tcpAddr)
 	// should NOT be handled as hex
 	val := "0xabc"
 	got, err := echoViaHTTP(cl, val)
@@ -293,7 +295,7 @@ func TestHexStringArg(t *testing.T) {
 }
 
 func TestQuotedStringArg(t *testing.T) {
-	cl := client.NewURIClient(tcpAddr)
+	cl := jsonrpc.NewURIClient(tcpAddr)
 	// should NOT be unquoted
 	val := "\"abc\""
 	got, err := echoViaHTTP(cl, val)
@@ -302,7 +304,7 @@ func TestQuotedStringArg(t *testing.T) {
 }
 
 func TestWSNewWSRPCFunc(t *testing.T) {
-	cl := client.NewWSClient(tcpAddr, websocketEndpoint)
+	cl := websocket.NewClient(tcpAddr, websocketEndpoint)
 	cl.SetLogger(log.TestingLogger())
 	err := cl.Start()
 	require.Nil(t, err)
@@ -327,7 +329,7 @@ func TestWSNewWSRPCFunc(t *testing.T) {
 }
 
 func TestWSHandlesArrayParams(t *testing.T) {
-	cl := client.NewWSClient(tcpAddr, websocketEndpoint)
+	cl := websocket.NewClient(tcpAddr, websocketEndpoint)
 	cl.SetLogger(log.TestingLogger())
 	err := cl.Start()
 	require.Nil(t, err)
@@ -352,13 +354,21 @@ func TestWSHandlesArrayParams(t *testing.T) {
 // TestWSClientPingPong checks that a client & server exchange pings
 // & pongs so connection stays alive.
 func TestWSClientPingPong(t *testing.T) {
-	cl := client.NewWSClient(tcpAddr, websocketEndpoint)
+	cl := websocket.NewClient(tcpAddr, websocketEndpoint)
 	cl.SetLogger(log.TestingLogger())
 	err := cl.Start()
 	require.Nil(t, err)
 	defer cl.Stop()
 
 	time.Sleep(6 * time.Second)
+}
+
+func TestUnmarshalError(t *testing.T) {
+	respString := `{"id":"jsonrpc-client","jsonrpc":"2.0","error":{"message":"Method status not supported.","code":-32000,"data":{"stack":"Error: Method status not supported.\n    at GethApiDouble.handleRequest (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/ganache-core/lib/subproviders/geth_api_double.js:70:1)\n    at next (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/web3-provider-engine/index.js:136:1)\n    at GethDefaults.handleRequest (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/ganache-core/lib/subproviders/gethdefaults.js:15:1)\n    at next (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/web3-provider-engine/index.js:136:1)\n    at SubscriptionSubprovider.FilterSubprovider.handleRequest (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/web3-provider-engine/subproviders/filters.js:89:1)\n    at SubscriptionSubprovider.handleRequest (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/web3-provider-engine/subproviders/subscriptions.js:137:1)\n    at next (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/web3-provider-engine/index.js:136:1)\n    at DelayedBlockFilter.handleRequest (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/ganache-core/lib/subproviders/delayedblockfilter.js:32:1)\n    at next (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/web3-provider-engine/index.js:136:1)\n    at RequestFunnel.handleRequest (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/ganache-core/lib/subproviders/requestfunnel.js:32:1)\n    at next (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/web3-provider-engine/index.js:136:1)\n    at Web3ProviderEngine._handleAsync (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/web3-provider-engine/index.js:123:1)\n    at Timeout._onTimeout (/home/silas/code/go/src/github.com/hyperledger/burrow/tests/vent/eth/node_modules/truffle/build/webpack:/node_modules/web3-provider-engine/index.js:107:1)\n    at listOnTimeout (node:internal/timers:557:17)\n    at processTimers (node:internal/timers:500:7)","name":"Error"}}}`
+
+	response := &types.RPCResponse{}
+	err := json.Unmarshal([]byte(respString), response)
+	require.NoError(t, err)
 }
 
 func randBytes(t *testing.T) []byte {

@@ -71,14 +71,14 @@ func ArrayToRequest(id string, method string, params []interface{}) (RPCRequest,
 // RESPONSE
 
 type RPCError struct {
-	Code    RPCErrorCode `json:"code"`
-	Message string       `json:"message"`
-	Data    string       `json:"data,omitempty"`
+	Code    RPCErrorCode    `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data,omitempty"`
 }
 
 func (err RPCError) Error() string {
 	const baseFormat = "RPC error %v - %s"
-	if err.Data != "" {
+	if len(err.Data) > 0 {
 		return fmt.Sprintf(baseFormat+": %s", err.Code, err.Message, err.Data)
 	}
 	return fmt.Sprintf(baseFormat, err.Code, err.Message)
@@ -102,22 +102,29 @@ func NewRPCSuccessResponse(id string, res interface{}) RPCResponse {
 	var rawMsg json.RawMessage
 
 	if res != nil {
-		var js []byte
-		js, err := json.Marshal(res)
+		var err error
+		rawMsg, err = json.Marshal(res)
 		if err != nil {
 			return RPCInternalError(id, errors.Wrap(err, "Error marshalling response"))
 		}
-		rawMsg = json.RawMessage(js)
 	}
 
 	return RPCResponse{JSONRPC: "2.0", ID: id, Result: rawMsg}
 }
 
 func NewRPCErrorResponse(id string, code RPCErrorCode, data string) RPCResponse {
+	var bs []byte
+	if data != "" {
+		var err error
+		bs, err = json.Marshal(data)
+		if err != nil {
+			panic(fmt.Errorf("unexpected error JSON marshalling string: %w", err))
+		}
+	}
 	return RPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,
-		Error:   &RPCError{Code: code, Message: code.String(), Data: data},
+		Error:   &RPCError{Code: code, Message: code.String(), Data: bs},
 	}
 }
 

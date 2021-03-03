@@ -230,6 +230,10 @@ test_integration_vent:
 test_integration_vent_postgres:
 	docker-compose run burrow make test_integration_vent
 
+.PHONY: postgres
+postgres:
+	docker-compose up
+
 .PHONY: test_restore
 test_restore:
 	@tests/scripts/bin_wrapper.sh tests/dump/test.sh
