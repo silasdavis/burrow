@@ -1,5 +1,5 @@
 package rpc
 
 type Client interface {
-	Call(method string, params map[string]interface{}, result interface{}) (interface{}, error)
+	Call(method string, params interface{}, result interface{}) (interface{}, error)
 }

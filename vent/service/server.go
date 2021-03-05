@@ -71,7 +71,7 @@ func healthHandler(consumer *Consumer) func(resp http.ResponseWriter, req *http.
 			resp.WriteHeader(http.StatusServiceUnavailable)
 		} else {
 			resp.WriteHeader(http.StatusOK)
-			bs, err := json.Marshal(consumer.statusMessage())
+			bs, err := json.Marshal(consumer.StatusMessage(req.Context()))
 			if err == nil {
 				resp.Header().Set("Content-Type", "application/json")
 				resp.Write(bs)

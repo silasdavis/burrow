@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"github.com/hyperledger/burrow/vent/chain/burrow"
 	"math/big"
 	"testing"
 	"time"
@@ -18,6 +19,8 @@ import (
 	"github.com/stretchr/testify/require"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 )
+
+const chainID = "TestChainID"
 
 func TestBlockConsumer(t *testing.T) {
 	doneCh := make(chan struct{})
@@ -79,7 +82,7 @@ func TestBlockConsumer(t *testing.T) {
 			},
 		})
 		require.NoError(t, err)
-		blockConsumer := NewBlockConsumer(projection, sqlsol.None, spec.GetEventAbi, eventCh, doneCh, logger)
+		blockConsumer := NewBlockConsumer(chainID, projection, sqlsol.None, spec.GetEventAbi, eventCh, doneCh, logger)
 		tables, err := consumeBlock(blockConsumer, eventCh, log)
 		require.NoError(t, err)
 		rows := tables[tableName]
@@ -104,7 +107,7 @@ func TestBlockConsumer(t *testing.T) {
 			},
 		})
 		require.NoError(t, err)
-		blockConsumer := NewBlockConsumer(projection, sqlsol.None, spec.GetEventAbi, eventCh, doneCh, logger)
+		blockConsumer := NewBlockConsumer(chainID, projection, sqlsol.None, spec.GetEventAbi, eventCh, doneCh, logger)
 		_, err = consumeBlock(blockConsumer, eventCh, log)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "could not find ABI")
@@ -127,7 +130,7 @@ func TestBlockConsumer(t *testing.T) {
 			},
 		})
 		require.NoError(t, err)
-		blockConsumer := NewBlockConsumer(projection, sqlsol.None, spec.GetEventAbi, eventCh, doneCh, logger)
+		blockConsumer := NewBlockConsumer(chainID, projection, sqlsol.None, spec.GetEventAbi, eventCh, doneCh, logger)
 		table, err := consumeBlock(blockConsumer, eventCh, log)
 		require.Len(t, table, 0, "should match no event")
 	})
@@ -151,7 +154,7 @@ func TestBlockConsumer(t *testing.T) {
 		spec, err := abi.ReadSpec(solidity.Abi_EventEmitter)
 		require.NoError(t, err)
 
-		blockConsumer := NewBlockConsumer(projection, sqlsol.None, spec.GetEventAbi, eventCh, doneCh, logger)
+		blockConsumer := NewBlockConsumer(chainID, projection, sqlsol.None, spec.GetEventAbi, eventCh, doneCh, logger)
 		table, err := consumeBlock(blockConsumer, eventCh, log)
 		// Check matches
 		require.NoError(t, err)
@@ -159,7 +162,7 @@ func TestBlockConsumer(t *testing.T) {
 		require.Len(t, table[tableName], 1)
 		// Now Remove the ABI - should not match the event
 		delete(spec.EventsByID, manyTypesEventSpec.ID)
-		blockConsumer = NewBlockConsumer(projection, sqlsol.None, spec.GetEventAbi, eventCh, doneCh, logger)
+		blockConsumer = NewBlockConsumer(chainID, projection, sqlsol.None, spec.GetEventAbi, eventCh, doneCh, logger)
 		table, err = consumeBlock(blockConsumer, eventCh, log)
 		require.NoError(t, err)
 		require.Len(t, table, 0, "should match no events")
@@ -186,7 +189,7 @@ func consumeBlock(blockConsumer func(block chain.Block) error, eventCh <-chan ty
 		}
 		block.AppendTxs(txe)
 	}
-	err := blockConsumer(chain.NewBurrowBlock(block))
+	err := blockConsumer(burrow.NewBurrowBlock(block))
 	if err != nil {
 		return nil, err
 	}

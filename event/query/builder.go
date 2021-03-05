@@ -26,7 +26,6 @@ const (
 	// Values
 	trueString  = "true"
 	falseString = "false"
-	emptyString = "empty"
 	timeString  = "TIME"
 	dateString  = "DATE"
 )
@@ -248,7 +247,7 @@ func (qb *Builder) conditionString() string {
 }
 
 func isEmpty(queryString string) bool {
-	return queryString == "" || queryString == emptyString
+	return queryString == ""
 }
 
 // Iterators over some strings

@@ -1,4 +1,4 @@
-package chain
+package burrow
 
 import (
 	"context"
@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hyperledger/burrow/event/query"
+	"github.com/hyperledger/burrow/vent/chain"
+
 	"github.com/hyperledger/burrow/binary"
 	"github.com/hyperledger/burrow/crypto"
 	"github.com/hyperledger/burrow/encoding"
 	"github.com/hyperledger/burrow/execution/errors"
-	"github.com/hyperledger/burrow/execution/evm/abi"
 	"github.com/hyperledger/burrow/execution/exec"
-	"github.com/hyperledger/burrow/rpc"
 	"github.com/hyperledger/burrow/rpc/rpcevents"
 	"github.com/hyperledger/burrow/rpc/rpcquery"
 	"github.com/hyperledger/burrow/vent/types"
@@ -21,32 +22,97 @@ import (
 )
 
 type BurrowChain struct {
-	conn  *grpc.ClientConn
-	query rpcquery.QueryClient
-	exec  rpcevents.ExecutionEventsClient
+	conn    *grpc.ClientConn
+	filter  query.Query
+	query   rpcquery.QueryClient
+	exec    rpcevents.ExecutionEventsClient
+	chainID string
+	version string
 }
 
-var _ Chain = (*BurrowChain)(nil)
+var _ chain.Chain = (*BurrowChain)(nil)
 
 func NewBurrow(grpcAddr string) (*BurrowChain, error) {
 	conn, err := encoding.GRPCDial(grpcAddr)
 	if err != nil {
 		return nil, err
 	}
+	client := rpcquery.NewQueryClient(conn)
+	status, err := client.Status(context.Background(), &rpcquery.StatusParam{})
+	if err != nil {
+		return nil, fmt.Errorf("could not get initial status from Burrow: %w", err)
+	}
 	return &BurrowChain{
-		conn:  conn,
-		query: rpcquery.NewQueryClient(conn),
-		exec:  rpcevents.NewExecutionEventsClient(conn),
+		conn:    conn,
+		query:   client,
+		exec:    rpcevents.NewExecutionEventsClient(conn),
+		chainID: status.ChainID,
+		version: status.BurrowVersion,
 	}, nil
 }
 
-func (b *BurrowChain) ConsumeBlockExecutions(
+func (b *BurrowChain) FilterBy(filter chain.Filter) error {
+	qb := query.NewBuilder()
+	for _, address := range filter.Addresses {
+		qb = qb.AndEquals("Address", address)
+	}
+	for i, topic := range filter.Topics {
+		qb = qb.AndEquals(exec.LogNKey(i), topic)
+	}
+	var err error
+	b.filter, err = qb.Query()
+	if err != nil {
+		return fmt.Errorf("could not build Vent filter query: %w", err)
+	}
+	return nil
+}
+
+func (b *BurrowChain) GetChainID() string {
+	return b.chainID
+}
+
+func (b *BurrowChain) GetVersion() string {
+	return b.version
+}
+
+func (b *BurrowChain) StatusMessage(ctx context.Context, lastProcessedHeight uint64) []interface{} {
+	var catchUpRatio float64
+	status, err := b.query.Status(ctx, &rpcquery.StatusParam{})
+	if err != nil {
+		err = fmt.Errorf("could not get Burrow chain status: %w", err)
+		return []interface{}{
+			"msg", "status",
+			"error", err.Error(),
+		}
+	}
+	if status.SyncInfo.LatestBlockHeight > 0 {
+		catchUpRatio = float64(lastProcessedHeight) / float64(status.SyncInfo.LatestBlockHeight)
+	}
+	return []interface{}{
+		"msg", "status",
+		"last_processed_height", lastProcessedHeight,
+		"fraction_caught_up", catchUpRatio,
+		"burrow_latest_block_height", status.SyncInfo.LatestBlockHeight,
+		"burrow_latest_block_duration", status.SyncInfo.LatestBlockDuration,
+		"burrow_latest_block_hash", status.SyncInfo.LatestBlockHash,
+		"burrow_latest_app_hash", status.SyncInfo.LatestAppHash,
+		"burrow_latest_block_time", status.SyncInfo.LatestBlockTime,
+		"burrow_latest_block_seen_time", status.SyncInfo.LatestBlockSeenTime,
+		"burrow_node_info", status.NodeInfo,
+		"burrow_catching_up", status.CatchingUp,
+	}
+}
+
+func (b *BurrowChain) ConsumeBlocks(
 	ctx context.Context,
-	in *rpcevents.BlocksRequest,
-	consumer func(Block) error,
+	in *rpcevents.BlockRange,
+	consumer func(chain.Block) error,
 	continuityOptions ...exec.ContinuityOpt) error {
 
-	stream, err := b.exec.Stream(ctx, in)
+	stream, err := b.exec.Stream(ctx, &rpcevents.BlocksRequest{
+		BlockRange: in,
+		Query:      b.filter.String(),
+	})
 	if err != nil {
 		return fmt.Errorf("could not connect to block stream: %w", err)
 	}
@@ -56,16 +122,18 @@ func (b *BurrowChain) ConsumeBlockExecutions(
 	}, continuityOptions...)
 }
 
-func (b *BurrowChain) Status(ctx context.Context, in *rpcquery.StatusParam) (*rpc.ResultStatus, error) {
-	return b.query.Status(ctx, in)
-}
-
 func (b *BurrowChain) Connectivity() connectivity.State {
 	return b.conn.GetState()
 }
 
-func (b *BurrowChain) GetMetadata(ctx context.Context, in *rpcquery.GetMetadataParam) (*rpcquery.MetadataResult, error) {
-	return b.query.GetMetadata(ctx, in)
+func (b *BurrowChain) GetABI(ctx context.Context, address crypto.Address) (string, error) {
+	result, err := b.query.GetMetadata(ctx, &rpcquery.GetMetadataParam{
+		Address: &address,
+	})
+	if err != nil {
+		return "", err
+	}
+	return result.Metadata, nil
 }
 
 func (b *BurrowChain) Close() error {
@@ -90,21 +158,18 @@ func (b *BurrowBlock) GetMetadata(columns types.SQLColumnNames) (map[string]inte
 	}, nil
 }
 
-var _ Block = (*BurrowBlock)(nil)
+var _ chain.Block = (*BurrowBlock)(nil)
 
 func (b *BurrowBlock) GetTime() time.Time {
 	return b.Header.GetTime()
 }
 
-func (b *BurrowBlock) GetChainID() string {
-	return b.Header.GetChainID()
-}
 func (b *BurrowBlock) GetHeight() uint64 {
 	return b.Height
 }
 
-func (b *BurrowBlock) GetTxs() []Transaction {
-	txs := make([]Transaction, len(b.TxExecutions))
+func (b *BurrowBlock) GetTxs() []chain.Transaction {
+	txs := make([]chain.Transaction, len(b.TxExecutions))
 	for i, tx := range b.TxExecutions {
 		txs[i] = (*BurrowTx)(tx)
 	}
@@ -113,7 +178,7 @@ func (b *BurrowBlock) GetTxs() []Transaction {
 
 type BurrowTx exec.TxExecution
 
-var _ Transaction = (*BurrowTx)(nil)
+var _ chain.Transaction = (*BurrowTx)(nil)
 
 func (tx *BurrowTx) GetException() *errors.Exception {
 	return tx.Exception
@@ -169,9 +234,9 @@ func (tx *BurrowTx) GetHash() binary.HexBytes {
 	return tx.TxHash
 }
 
-func (tx *BurrowTx) GetEvents() []Event {
+func (tx *BurrowTx) GetEvents() []chain.Event {
 	// All txs have events, but not all have LogEvents
-	var events []Event
+	var events []chain.Event
 	for _, ev := range tx.Events {
 		if ev.Log != nil {
 			events = append(events, (*BurrowEvent)(ev))
@@ -182,7 +247,7 @@ func (tx *BurrowTx) GetEvents() []Event {
 
 type BurrowEvent exec.Event
 
-var _ Event = (*BurrowEvent)(nil)
+var _ chain.Event = (*BurrowEvent)(nil)
 
 func (ev *BurrowEvent) GetTransactionHash() binary.HexBytes {
 	return ev.Header.TxHash
@@ -202,10 +267,6 @@ func (ev *BurrowEvent) GetData() []byte {
 
 func (ev *BurrowEvent) GetAddress() crypto.Address {
 	return ev.Log.Address
-}
-
-func (ev *BurrowEvent) GetSolidityEventID() abi.EventID {
-	return ev.Log.SolidityEventID()
 }
 
 // Tags

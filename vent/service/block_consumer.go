@@ -13,9 +13,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-func NewBlockConsumer(projection *sqlsol.Projection, opt sqlsol.SpecOpt, getEventSpec EventSpecGetter,
-	eventCh chan<- types.EventData, doneCh chan struct{},
-	logger *logging.Logger) func(block chain.Block) error {
+func NewBlockConsumer(chainID string, projection *sqlsol.Projection, opt sqlsol.SpecOpt, getEventSpec EventSpecGetter,
+	eventCh chan<- types.EventData, doneCh chan struct{}, logger *logging.Logger) func(block chain.Block) error {
 
 	logger = logger.WithScope("makeBlockConsumer")
 
@@ -67,7 +66,7 @@ func NewBlockConsumer(projection *sqlsol.Projection, opt sqlsol.SpecOpt, getEven
 					// This is an original transaction from the current chain so we build its origin from context
 					txOrigin = &exec.Origin{
 						Time:    block.GetTime(),
-						ChainID: block.GetChainID(),
+						ChainID: chainID,
 						Height:  block.GetHeight(),
 						Index:   txe.GetIndex(),
 					}
@@ -75,7 +74,7 @@ func NewBlockConsumer(projection *sqlsol.Projection, opt sqlsol.SpecOpt, getEven
 
 				for _, event := range events {
 					var tagged query.Tagged = event
-					eventID := event.GetSolidityEventID()
+					eventID := exec.SolidityEventID(event.GetTopics())
 					eventSpec, eventSpecErr := getEventSpec(eventID, event.GetAddress())
 					if eventSpecErr != nil {
 						logger.InfoMsg("could not get ABI for solidity event",
@@ -103,8 +102,7 @@ func NewBlockConsumer(projection *sqlsol.Projection, opt sqlsol.SpecOpt, getEven
 									eventClass.Filter, eventID, event.GetAddress())
 							}
 
-							logger.InfoMsg("Matched event", "event_id", event.GetSolidityEventID(),
-								"filter", eventClass.Filter)
+							logger.InfoMsg("Matched event", "event_id", eventID, "filter", eventClass.Filter)
 
 							// unpack, decode & build event data
 							eventData, err := buildEventData(projection, eventClass, event, txOrigin, eventSpec, logger)

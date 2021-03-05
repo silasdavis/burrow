@@ -2,15 +2,12 @@ package jsonrpc
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"reflect"
-	"strings"
 
 	"github.com/hyperledger/burrow/rpc/lib/types"
 	"github.com/pkg/errors"
@@ -18,110 +15,59 @@ import (
 
 // HTTPClient is a common interface for Client and URIClient.
 type HTTPClient interface {
-	Call(method string, params map[string]interface{}, result interface{}) (interface{}, error)
+	Call(method string, params interface{}, result interface{}) (interface{}, error)
 }
-
-// TODO: Deprecate support for IP:PORT or /path/to/socket
-func MakeHTTPDialer(remoteAddr string) (string, func(context.Context, string, string) (net.Conn, error)) {
-	parts := strings.SplitN(remoteAddr, "://", 2)
-	var protocol, address string
-	if len(parts) == 1 {
-		// default to tcp if nothing specified
-		protocol, address = "tcp", remoteAddr
-	} else if len(parts) == 2 {
-		protocol, address = parts[0], parts[1]
-	} else {
-		// return a invalid message
-		msg := fmt.Sprintf("Invalid addr: %s", remoteAddr)
-		return msg, func(_ context.Context, _ string, _ string) (net.Conn, error) {
-			return nil, errors.New(msg)
-		}
-	}
-	// accept http as an alias for tcp
-	if protocol == "http" {
-		protocol = "tcp"
-	}
-
-	// replace / with . for http requests (kvstore domain)
-	trimmedAddress := strings.Replace(address, "/", ".", -1)
-	return trimmedAddress, func(ctx context.Context, proto, addr string) (net.Conn, error) {
-		var d net.Dialer
-		return d.DialContext(ctx, protocol, address)
-	}
-}
-
-// We overwrite the http.Client.Dial so we can do http over tcp or unix.
-// remoteAddr should be fully featured (eg. with tcp:// or unix://)
-func makeHTTPClient(remoteAddr string) (string, *http.Client) {
-	address, dialer := MakeHTTPDialer(remoteAddr)
-	return "http://" + address, &http.Client{
-		Transport: &http.Transport{
-			DialContext: dialer,
-		},
-	}
-}
-
-//------------------------------------------------------------------------------------
 
 // Client takes params as a slice
 type Client struct {
 	address string
-	client  *http.Client
+	client  http.Client
 }
 
 // NewClient returns a Client pointed at the given address.
 func NewClient(remote string) *Client {
-	address, client := makeHTTPClient(remote)
 	return &Client{
-		address: address,
-		client:  client,
+		address: remote,
 	}
 }
 
-func (c *Client) Call(method string, params map[string]interface{}, result interface{}) (interface{}, error) {
-	request, err := types.MapToRequest("jsonrpc-client", method, params)
+func (c *Client) Call(method string, params interface{}, result interface{}) (interface{}, error) {
+	request, err := types.NewRequest("jsonrpc-client", method, params)
 	if err != nil {
 		return nil, err
 	}
-	requestBytes, err := json.Marshal(request)
+	bs, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
 	}
-	// log.Info(string(requestBytes))
-	requestBuf := bytes.NewBuffer(requestBytes)
-	// log.Info(Fmt("RPC request to %v (%v): %v", c.remote, method, string(requestBytes)))
-	httpResponse, err := c.client.Post(c.address, "text/json", requestBuf)
+	buf := bytes.NewBuffer(bs)
+	response, err := c.client.Post(c.address, "application/json", buf)
 	if err != nil {
 		return nil, err
 	}
-	defer httpResponse.Body.Close() // nolint: errcheck
+	defer response.Body.Close()
 
-	responseBytes, err := ioutil.ReadAll(httpResponse.Body)
+	bs, err = ioutil.ReadAll(response.Body)
 	if err != nil {
 		return nil, err
 	}
-	// 	log.Info(Fmt("RPC response: %v", string(responseBytes)))
-	return unmarshalResponseBytes(responseBytes, result)
+	return unmarshalResponseBytes(bs, result)
 }
-
-//-------------------------------------------------------------
 
 // URI takes params as a map
 type URIClient struct {
 	address string
-	client  *http.Client
+	client  http.Client
 }
 
 func NewURIClient(remote string) *URIClient {
-	address, client := makeHTTPClient(remote)
 	return &URIClient{
-		address: address,
-		client:  client,
+		address: remote,
 	}
 }
 
-func (c *URIClient) Call(method string, params map[string]interface{}, result interface{}) (interface{}, error) {
-	values, err := argsToURLValues(params)
+func (c *URIClient) Call(method string, params interface{}, result interface{}) (interface{}, error) {
+	values, err := argsToURLValues(params.(map[string]interface{}))
 	if err != nil {
 		return nil, err
 	}
@@ -139,8 +85,6 @@ func (c *URIClient) Call(method string, params map[string]interface{}, result in
 	return unmarshalResponseBytes(responseBytes, result)
 }
 
-//------------------------------------------------
-
 func unmarshalResponseBytes(responseBytes []byte, result interface{}) (interface{}, error) {
 	// Read response.  If rpc/core/types is imported, the result will unmarshal
 	// into the correct type.
@@ -152,7 +96,7 @@ func unmarshalResponseBytes(responseBytes []byte, result interface{}) (interface
 		return nil, errors.Errorf("Error unmarshalling rpc response: %v", err)
 	}
 	if response.Error != nil {
-		return nil, errors.Errorf("Response error: %v", response.Error)
+		return nil, response.Error
 	}
 	// Unmarshal the RawMessage into the result.
 	err = json.Unmarshal(response.Result, result)

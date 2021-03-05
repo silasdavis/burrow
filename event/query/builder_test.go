@@ -12,7 +12,7 @@ func TestQueryBuilder(t *testing.T) {
 	qb := NewBuilder()
 	qry, err := qb.Query()
 	require.NoError(t, err)
-	assert.Equal(t, emptyString, qry.String())
+	assert.Equal(t, "", qry.String())
 
 	qb = qb.AndGreaterThanOrEqual("foo.size", 45)
 	qry, err = qb.Query()
